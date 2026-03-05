@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { StarRating } from "@/components/star-rating"
 import { MarkdownViewModal } from "@/components/markdown-view-modal"
 import { ComparisonView } from "@/components/comparison-view"
@@ -271,40 +270,41 @@ export default function VotePage() {
       <main className="mx-auto max-w-4xl px-6 py-10">
         <h2 className="text-sm font-medium text-foreground mb-6">{vote.title}</h2>
 
-        <div className="mb-8">
-          <ComparisonView
-            variations={vote.variations.map((v, i) => ({
-              imageUrl: v.imageUrl,
-              label: v.label?.trim() || `Variation ${i + 1}`,
-            }))}
-            renderBelow={(i) => {
-              const v = vote.variations[i]
-              if (!v?.description) return null
-              return (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <MarkdownViewModal
-                    content={v.description}
-                    title={`${v.label?.trim() || `Variation ${i + 1}`} description`}
-                    triggerClassName="h-7 w-7 p-0 text-muted-foreground hover:text-foreground shrink-0"
-                  />
-                  <span>View description</span>
-                </div>
-              )
-            }}
-          />
-        </div>
-
         {votingDisabled ? (
-          <p className="text-sm text-muted-foreground">
-            This vote is {isClosed ? "closed" : "past its deadline"}. No more submissions accepted.
-          </p>
+          <>
+            <div className="mb-8">
+              <ComparisonView
+                variations={vote.variations.map((v, i) => ({
+                  imageUrl: v.imageUrl,
+                  label: v.label?.trim() || `Variation ${i + 1}`,
+                }))}
+                renderBelow={(i) => {
+                  const v = vote.variations[i]
+                  if (!v?.description) return null
+                  return (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <MarkdownViewModal
+                        content={v.description}
+                        title={`${v.label?.trim() || `Variation ${i + 1}`} description`}
+                        triggerClassName="h-7 w-7 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                      />
+                      <span>View description</span>
+                    </div>
+                  )
+                }}
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              This vote is {isClosed ? "closed" : "past its deadline"}. No more submissions accepted.
+            </p>
+          </>
         ) : alreadyVoted ? (
           <p className="text-sm text-muted-foreground">
             You have already voted. You can close this page.
           </p>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6 max-w-xl">
-            <div className="flex flex-col gap-1.5">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="flex flex-col gap-1.5 max-w-xs">
               <Label htmlFor="voter-name" className="text-xs text-muted-foreground">
                 Your name (required)
               </Label>
@@ -318,73 +318,84 @@ export default function VotePage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">
-                Which do you prefer? (optional)
-              </Label>
-              <RadioGroup
-                value={chosenIndex}
-                onValueChange={setChosenIndex}
-                className="flex flex-row gap-4"
-              >
-                {vote.variations.map((v, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <RadioGroupItem value={String(i)} id={`pick-${i}`} />
-                    <Label htmlFor={`pick-${i}`} className="text-sm cursor-pointer">
-                      {v.label?.trim() || `Variation ${i + 1}`}
-                    </Label>
+            <ComparisonView
+              variations={vote.variations.map((v, i) => ({
+                imageUrl: v.imageUrl,
+                label: v.label?.trim() || `Variation ${i + 1}`,
+              }))}
+              renderBelow={(i) => {
+                const v = vote.variations[i]
+                const label = v.label?.trim() || `Variation ${i + 1}`
+                return (
+                  <div className="space-y-3 pt-1">
+                    {v.description && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <MarkdownViewModal
+                          content={v.description}
+                          title={`${label} description`}
+                          triggerClassName="h-7 w-7 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                        />
+                        <span>View description</span>
+                      </div>
+                    )}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 rounded-sm border border-border/50 bg-muted/10 px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="pick-best"
+                          id={`pick-${i}`}
+                          value={String(i)}
+                          checked={chosenIndex === String(i)}
+                          onChange={() => setChosenIndex(String(i))}
+                          className="accent-accent h-3.5 w-3.5"
+                        />
+                        <Label htmlFor={`pick-${i}`} className="text-xs cursor-pointer text-muted-foreground">
+                          Pick as best
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground">Rate:</span>
+                        <StarRating
+                          value={starRatings[i] ?? 0}
+                          onChange={(val) =>
+                            setStarRatings((prev) => {
+                              const next = [...prev]
+                              next[i] = val
+                              return next
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </RadioGroup>
-            </div>
+                )
+              }}
+            />
 
-            <div className="space-y-3">
-              <Label className="text-xs text-muted-foreground">
-                Rate each variation (optional, 1–5 stars)
-              </Label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {vote.variations.map((v, i) => (
-                  <div key={i} className="flex flex-col gap-1">
-                    <span className="text-[11px] text-muted-foreground">
-                      {v.label?.trim() || `Variation ${i + 1}`}
-                    </span>
-                    <StarRating
-                      value={starRatings[i] ?? 0}
-                      onChange={(v) =>
-                        setStarRatings((prev) => {
-                          const next = [...prev]
-                          next[i] = v
-                          return next
-                        })
-                      }
-                    />
-                  </div>
-                ))}
+            <div className="max-w-xl space-y-6">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="comment" className="text-xs text-muted-foreground">
+                  Overall comment (optional)
+                </Label>
+                <Textarea
+                  id="comment"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="Any feedback for the team..."
+                  rows={3}
+                  className="text-sm resize-none"
+                />
               </div>
-            </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="comment" className="text-xs text-muted-foreground">
-                Comment (optional)
-              </Label>
-              <Textarea
-                id="comment"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Any feedback for the team..."
-                rows={3}
-                className="text-sm resize-none"
-              />
+              <Button
+                type="submit"
+                disabled={!voterName.trim() || submitting}
+                variant="outline"
+                className="border-foreground text-foreground hover:bg-foreground hover:text-background"
+              >
+                {submitting ? "Submitting…" : "Submit vote"}
+              </Button>
             </div>
-
-            <Button
-              type="submit"
-              disabled={!voterName.trim() || submitting}
-              variant="outline"
-              className="border-foreground text-foreground hover:bg-foreground hover:text-background"
-            >
-              {submitting ? "Submitting…" : "Submit vote"}
-            </Button>
           </form>
         )}
       </main>

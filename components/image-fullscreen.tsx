@@ -47,7 +47,7 @@ export function ImageFullScreen({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           showCloseButton={true}
-          className="max-w-[calc(100%-2rem)] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] w-full p-2 flex items-center justify-center bg-black/95 border-border"
+          className="max-w-[95vw] sm:max-w-[95vw] h-[90vh] max-h-[90vh] w-full p-2 flex items-center justify-center bg-black/95 border-border"
         >
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           <img

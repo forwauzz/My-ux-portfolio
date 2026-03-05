@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, ZoomIn } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ComparisonVariation {
@@ -29,9 +29,32 @@ export function ComparisonView({
   renderBadge,
   cardClassName,
 }: ComparisonViewProps) {
-  const [mode, setMode] = useState<"side-by-side" | "stacked">("side-by-side")
-  const [stackedIndex, setStackedIndex] = useState(0)
-  const [fullScreen, setFullScreen] = useState(false)
+  const [mode, setMode] = useState<"side-by-side" | "stacked">("stacked")
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+
+  const openLightbox = useCallback((i: number) => setLightboxIndex(i), [])
+  const closeLightbox = useCallback(() => setLightboxIndex(null), [])
+  const prevLightbox = useCallback(
+    () => setLightboxIndex((i) => (i != null && i > 0 ? i - 1 : i)),
+    [],
+  )
+  const nextLightbox = useCallback(
+    () =>
+      setLightboxIndex((i) =>
+        i != null && i < variations.length - 1 ? i + 1 : i,
+      ),
+    [variations.length],
+  )
+
+  useEffect(() => {
+    if (lightboxIndex == null) return
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "ArrowLeft") prevLightbox()
+      else if (e.key === "ArrowRight") nextLightbox()
+    }
+    window.addEventListener("keydown", handleKey)
+    return () => window.removeEventListener("keydown", handleKey)
+  }, [lightboxIndex, prevLightbox, nextLightbox])
 
   if (variations.length === 0) return null
 
@@ -43,136 +66,159 @@ export function ComparisonView({
           onValueChange={(v) => setMode(v as typeof mode)}
         >
           <TabsList>
-            <TabsTrigger value="side-by-side" className="text-xs">
-              Side by side
-            </TabsTrigger>
             <TabsTrigger value="stacked" className="text-xs">
               Stacked
             </TabsTrigger>
+            <TabsTrigger value="side-by-side" className="text-xs">
+              Side by side
+            </TabsTrigger>
           </TabsList>
         </Tabs>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-xs gap-1.5 text-muted-foreground hover:text-foreground"
-          onClick={() => setFullScreen(true)}
-        >
-          <Maximize2 className="h-3.5 w-3.5" />
-          Compare full screen
-        </Button>
       </div>
 
+      {/* --- SIDE-BY-SIDE: thumbnail grid --- */}
       {mode === "side-by-side" && (
-        <div className="flex gap-4 overflow-x-auto pb-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {variations.map((v, i) => (
             <div
               key={i}
               className={cn(
-                "flex-1 min-w-[280px] rounded-sm border bg-card p-3 space-y-2",
+                "rounded-sm border bg-card p-3 space-y-2",
                 cardClassName?.(i) ?? "border-border",
               )}
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase">
+                <p className="text-xs font-medium text-muted-foreground uppercase truncate">
                   {v.label}
                 </p>
                 {renderBadge?.(i)}
               </div>
-              <div className="h-[400px] md:h-[480px] rounded-sm border border-border/50 bg-muted/20 flex items-center justify-center overflow-hidden">
+              <button
+                type="button"
+                className="relative w-full aspect-[4/3] rounded-sm border border-border/50 bg-muted/20 flex items-center justify-center overflow-hidden group cursor-pointer"
+                onClick={() => openLightbox(i)}
+                aria-label={`View ${v.label} full size`}
+              >
                 <img
                   src={v.imageUrl}
                   alt={v.label}
                   className="max-w-full max-h-full object-contain"
                 />
-              </div>
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                  <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
               {renderBelow?.(i)}
             </div>
           ))}
         </div>
       )}
 
+      {/* --- STACKED: all designs vertically --- */}
       {mode === "stacked" && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-xs gap-1"
-              disabled={stackedIndex === 0}
-              onClick={() => setStackedIndex((idx) => idx - 1)}
+        <div className="space-y-6">
+          {variations.map((v, i) => (
+            <div
+              key={i}
+              className={cn(
+                "rounded-sm border bg-card p-3 space-y-2",
+                cardClassName?.(i) ?? "border-border",
+              )}
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              Prev
-            </Button>
-            <span className="text-xs font-medium text-muted-foreground">
-              {variations[stackedIndex].label} ({stackedIndex + 1} of{" "}
-              {variations.length})
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-xs gap-1"
-              disabled={stackedIndex === variations.length - 1}
-              onClick={() => setStackedIndex((idx) => idx + 1)}
-            >
-              Next
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-          <div
-            className={cn(
-              "rounded-sm border bg-card p-3 space-y-2",
-              cardClassName?.(stackedIndex) ?? "border-border",
-            )}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase">
-                {variations[stackedIndex].label}
-              </p>
-              {renderBadge?.(stackedIndex)}
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase">
+                  {v.label}
+                  <span className="ml-2 normal-case text-muted-foreground/60">
+                    ({i + 1} of {variations.length})
+                  </span>
+                </p>
+                {renderBadge?.(i)}
+              </div>
+              <button
+                type="button"
+                className="relative w-full h-[calc(100vh-18rem)] min-h-[300px] max-h-[700px] rounded-sm border border-border/50 bg-muted/20 flex items-center justify-center overflow-hidden group cursor-pointer"
+                onClick={() => openLightbox(i)}
+                aria-label={`View ${v.label} full size`}
+              >
+                <img
+                  src={v.imageUrl}
+                  alt={v.label}
+                  className="max-w-full max-h-full object-contain"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                  <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
+              {renderBelow?.(i)}
             </div>
-            <div className="h-[500px] md:h-[600px] rounded-sm border border-border/50 bg-muted/20 flex items-center justify-center overflow-hidden">
-              <img
-                src={variations[stackedIndex].imageUrl}
-                alt={variations[stackedIndex].label}
-                className="max-w-full max-h-full object-contain"
-              />
-            </div>
-            {renderBelow?.(stackedIndex)}
-          </div>
+          ))}
         </div>
       )}
 
-      <Dialog open={fullScreen} onOpenChange={setFullScreen}>
+      {/* --- LIGHTBOX: single-image with prev/next --- */}
+      <Dialog
+        open={lightboxIndex != null}
+        onOpenChange={(open) => {
+          if (!open) closeLightbox()
+        }}
+      >
         <DialogContent
           showCloseButton={true}
-          className="max-w-[calc(100%-2rem)] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] w-full p-4 bg-black/95 border-border"
+          className="max-w-[95vw] sm:max-w-[95vw] h-[90vh] max-h-[90vh] w-full p-0 bg-black/95 border-border flex flex-col"
         >
           <DialogTitle className="sr-only">
-            Full-screen comparison
+            {lightboxIndex != null
+              ? variations[lightboxIndex]?.label
+              : "Image preview"}
           </DialogTitle>
-          <div className="flex gap-4 h-full overflow-x-auto items-stretch">
-            {variations.map((v, i) => (
-              <div
-                key={i}
-                className="flex-1 min-w-[300px] flex flex-col gap-2"
-              >
-                <p className="text-xs font-medium text-white/70 uppercase text-center shrink-0">
-                  {v.label}
+
+          {lightboxIndex != null && (
+            <>
+              <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-center gap-2">
+                <p className="text-xs font-medium text-white/70 uppercase">
+                  {variations[lightboxIndex].label}
                 </p>
-                <div className="flex-1 flex items-center justify-center min-h-0">
-                  <img
-                    src={v.imageUrl}
-                    alt={v.label}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                </div>
+                <span className="text-xs text-white/40">
+                  ({lightboxIndex + 1} of {variations.length})
+                </span>
               </div>
-            ))}
-          </div>
+
+              <div className="flex-1 relative min-h-0 flex items-center justify-center px-12 pb-4">
+                {variations.length > 1 && lightboxIndex > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white"
+                    onClick={prevLightbox}
+                    aria-label="Previous variation"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </Button>
+                )}
+
+                <img
+                  src={variations[lightboxIndex].imageUrl}
+                  alt={variations[lightboxIndex].label}
+                  className="max-w-full max-h-full object-contain rounded-sm"
+                />
+
+                {variations.length > 1 &&
+                  lightboxIndex < variations.length - 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white"
+                      onClick={nextLightbox}
+                      aria-label="Next variation"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </Button>
+                  )}
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
