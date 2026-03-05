@@ -1,0 +1,11 @@
+# Netlify build for Next.js (auto-detected; explicit for clarity)
+# https://docs.netlify.com/build/frameworks/framework-setup-guides/nextjs/overview
+
+[build]
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Env vars are set in Netlify UI (Site settings > Environment variables).
+# Do NOT put IMGBB_API_KEY or any secrets in this file.

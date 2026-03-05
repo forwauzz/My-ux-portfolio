@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User data: only the owner can read/write
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Share links: anyone can read by token; only owner can create/delete
+    match /shareLinks/{token} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    // Design votes: anyone can read (by token); only owner create/update/delete
+    match /designVotes/{voteId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    // Design vote responses: anyone can create; owner can always read;
+    // anyone can read if the vote's showResultsToVoters flag is true
+    match /designVoteResponses/{voteId}/responses/{responseId} {
+      allow create: if true;
+      allow read: if
+        (request.auth != null && get(/databases/$(database)/documents/designVotes/$(voteId)).data.userId == request.auth.uid)
+        || get(/databases/$(database)/documents/designVotes/$(voteId)).data.showResultsToVoters == true;
+    }
+  }
+}
