@@ -83,6 +83,17 @@ interface ProjectOption {
   name: string
 }
 
+const DEFAULT_PROJECTS = [
+  {
+    id: "alie",
+    name: "ALIE",
+  },
+  {
+    id: "vision",
+    name: "VISION",
+  },
+] as const
+
 function getEmptyForm() {
   return {
     title: "",
@@ -128,14 +139,22 @@ export function KnowledgeVault() {
     const projectsRef = collection(db, "users", user.uid, "projects")
     getDocs(query(projectsRef, orderBy("createdAt", "asc")))
       .then((snap) => {
-        setProjects(
-          snap.docs.map((d) => ({
-            id: d.id,
-            name: (d.data().name as string) ?? d.id,
-          }))
-        )
+        const fromDb: ProjectOption[] = snap.docs.map((d) => ({
+          id: d.id,
+          name: (d.data().name as string) ?? d.id,
+        }))
+        const merged: ProjectOption[] = [...fromDb]
+        DEFAULT_PROJECTS.forEach((base) => {
+          if (!merged.some((p) => p.id === base.id)) {
+            merged.push({ id: base.id, name: base.name })
+          }
+        })
+        setProjects(merged)
       })
-      .catch(() => {})
+      .catch(() => {
+        // If projects collection is missing, fall back to defaults
+        setProjects(DEFAULT_PROJECTS.map((p) => ({ id: p.id, name: p.name })))
+      })
   }, [user?.uid])
 
   useEffect(() => {
@@ -271,7 +290,7 @@ export function KnowledgeVault() {
         toast.success("Entry updated")
       } else {
         const col = collection(db, "users", user.uid, "vaultEntries")
-        await addDoc(col, {
+        const docData: Record<string, unknown> = {
           title: form.title,
           category: form.category,
           linkedCourse: form.linkedCourse,
@@ -279,9 +298,12 @@ export function KnowledgeVault() {
           date: form.date || new Date().toISOString().split("T")[0],
           url: form.url,
           note: form.note,
-          imageUrl,
           createdAt: serverTimestamp(),
-        })
+        }
+        if (imageUrl) {
+          docData.imageUrl = imageUrl
+        }
+        await addDoc(col, docData)
         const q = query(col, orderBy("createdAt", "desc"))
         const snap = await getDocs(q)
         setEntries(

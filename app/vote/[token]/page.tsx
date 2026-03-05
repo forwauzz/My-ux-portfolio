@@ -70,13 +70,27 @@ export default function VotePage() {
     setSubmitting(true)
     try {
       const responsesRef = collection(db, "designVoteResponses", token, "responses")
-      await addDoc(responsesRef, {
+      const payload: {
+        voterName: string
+        chosenIndex?: number
+        starRatings?: number[]
+        comment?: string
+        createdAt: string
+      } = {
         voterName: voterName.trim(),
-        chosenIndex: chosenIndex !== "" ? Number(chosenIndex) : undefined,
-        starRatings: starRatings.some((s) => s > 0) ? starRatings : undefined,
-        comment: comment.trim() || undefined,
         createdAt: new Date().toISOString(),
-      })
+      }
+      if (chosenIndex !== "") {
+        payload.chosenIndex = Number(chosenIndex)
+      }
+      if (starRatings.some((s) => s > 0)) {
+        payload.starRatings = starRatings
+      }
+      const trimmedComment = comment.trim()
+      if (trimmedComment) {
+        payload.comment = trimmedComment
+      }
+      await addDoc(responsesRef, payload)
       setSubmitted(true)
       if (typeof window !== "undefined") {
         try {
@@ -366,6 +380,7 @@ export default function VotePage() {
             <Button
               type="submit"
               disabled={!voterName.trim() || submitting}
+              variant="outline"
               className="border-foreground text-foreground hover:bg-foreground hover:text-background"
             >
               {submitting ? "Submitting…" : "Submit vote"}
