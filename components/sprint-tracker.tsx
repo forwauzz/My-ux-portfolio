@@ -23,6 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Download } from "lucide-react"
+import { downloadImage, slugify } from "@/lib/download-image"
+
 const STATUS_OPTIONS = [
   "Not Started",
   "Testing",
@@ -412,9 +415,24 @@ export function SprintTracker() {
             )}
             {displaySprint.imageUrl && (
               <div>
-                <p className="text-xs text-muted-foreground mb-0.5">
-                  Experiment Image
-                </p>
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <p className="text-xs text-muted-foreground">
+                    Experiment Image
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadImage(
+                        displaySprint.imageUrl!,
+                        `sprint-${slugify(displaySprint.id)}.jpg`,
+                      )
+                    }
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download
+                  </button>
+                </div>
                 <img
                   src={displaySprint.imageUrl}
                   alt="Sprint experiment"

@@ -23,7 +23,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, Download } from "lucide-react"
+import { downloadImage, slugify } from "@/lib/download-image"
 import { format } from "date-fns"
 import { toast } from "sonner"
 interface LogEntry {
@@ -458,11 +459,23 @@ export function DailyLog() {
             </p>
           )}
           {imagePreview && (
-            <img
-              src={imagePreview}
-              alt="Selected daily log"
-              className="mt-2 max-h-40 rounded-sm border border-border object-cover"
-            />
+            <div className="mt-2">
+              <img
+                src={imagePreview}
+                alt="Selected daily log"
+                className="max-h-40 rounded-sm border border-border object-cover"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  downloadImage(imagePreview, "daily-log-preview.jpg")
+                }
+                className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download
+              </button>
+            </div>
           )}
         </div>
 
@@ -575,9 +588,24 @@ export function DailyLog() {
                     )}
                     {entry.imageUrl && (
                       <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-1">
-                          Image
-                        </p>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Image
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              downloadImage(
+                                entry.imageUrl!,
+                                `daily-log-${slugify(entry.date)}.jpg`,
+                              )
+                            }
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Download
+                          </button>
+                        </div>
                         <img
                           src={entry.imageUrl}
                           alt={entry.date}

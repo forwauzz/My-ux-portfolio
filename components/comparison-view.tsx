@@ -8,8 +8,9 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ChevronLeft, ChevronRight, ZoomIn } from "lucide-react"
+import { ChevronLeft, ChevronRight, Download, ZoomIn } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { downloadImage, slugify } from "@/lib/download-image"
 
 interface ComparisonVariation {
   imageUrl: string
@@ -108,6 +109,19 @@ export function ComparisonView({
                   <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground w-full justify-start"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  downloadImage(v.imageUrl, `${slugify(v.label)}.jpg`)
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download image
+              </Button>
               {renderBelow?.(i)}
             </div>
           ))}
@@ -149,6 +163,19 @@ export function ComparisonView({
                   <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  downloadImage(v.imageUrl, `${slugify(v.label)}.jpg`)
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download image
+              </Button>
               {renderBelow?.(i)}
             </div>
           ))}
@@ -174,13 +201,28 @@ export function ComparisonView({
 
           {lightboxIndex != null && (
             <>
-              <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-center gap-2">
+              <div className="shrink-0 px-4 pt-3 pb-2 flex items-center justify-center gap-3">
                 <p className="text-xs font-medium text-white/70 uppercase">
                   {variations[lightboxIndex].label}
                 </p>
                 <span className="text-xs text-white/40">
                   ({lightboxIndex + 1} of {variations.length})
                 </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs gap-1.5 text-white/70 hover:text-white hover:bg-white/10"
+                  onClick={() =>
+                    downloadImage(
+                      variations[lightboxIndex].imageUrl,
+                      `${slugify(variations[lightboxIndex].label)}.jpg`,
+                    )
+                  }
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </Button>
               </div>
 
               <div className="flex-1 relative min-h-0 flex items-center justify-center px-12 pb-4">

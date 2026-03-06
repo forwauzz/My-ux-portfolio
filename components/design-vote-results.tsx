@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import { RichTextEditor } from "@/components/rich-text-editor"
 import { StarRatingDisplay } from "@/components/star-rating"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { MarkdownViewModal } from "@/components/markdown-view-modal"
 import { richTextToPlainText } from "@/lib/render-rich"
@@ -45,6 +46,7 @@ interface DesignVoteResultsProps {
   responses: DesignVoteResponse[]
   editableDescriptions?: boolean
   onSaveDescription?: (index: number, value: string) => Promise<void>
+  onSaveLabel?: (index: number, value: string) => Promise<void>
 }
 
 function relativeTime(iso: string): string {
@@ -72,10 +74,14 @@ export function DesignVoteResults({
   responses,
   editableDescriptions = false,
   onSaveDescription,
+  onSaveLabel,
 }: DesignVoteResultsProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [editingDescription, setEditingDescription] = useState("")
   const [savingDescription, setSavingDescription] = useState(false)
+  const [editingLabelIndex, setEditingLabelIndex] = useState<number | null>(null)
+  const [editingLabelValue, setEditingLabelValue] = useState("")
+  const [savingLabel, setSavingLabel] = useState(false)
   const [showResponses, setShowResponses] = useState(true)
   const [sortKey, setSortKey] = useState<SortKey>("time")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
@@ -193,6 +199,19 @@ export function DesignVoteResults({
     }
   }
 
+  async function handleSaveLabel(index: number) {
+    if (!onSaveLabel) return
+    const value = editingLabelValue.trim() || `Variation ${index + 1}`
+    setSavingLabel(true)
+    try {
+      await onSaveLabel(index, value)
+      setEditingLabelIndex(null)
+      setEditingLabelValue("")
+    } finally {
+      setSavingLabel(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <h2 className="text-sm font-medium text-foreground">{title}</h2>
@@ -218,6 +237,70 @@ export function DesignVoteResults({
           const v = variations[i]
           return (
             <div className="space-y-2">
+              {editableDescriptions && onSaveLabel && (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] text-muted-foreground">Image title</p>
+                  {editingLabelIndex === i ? (
+                    <div className="flex flex-col gap-2">
+                      <Input
+                        value={editingLabelValue}
+                        onChange={(e) => setEditingLabelValue(e.target.value)}
+                        placeholder={`Variation ${i + 1}`}
+                        className="text-sm h-8"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveLabel(i)
+                          if (e.key === "Escape") {
+                            setEditingLabelIndex(null)
+                            setEditingLabelValue("")
+                          }
+                        }}
+                      />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          disabled={savingLabel}
+                          onClick={() => handleSaveLabel(i)}
+                        >
+                          {savingLabel ? "Saving…" : "Save"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => {
+                            setEditingLabelIndex(null)
+                            setEditingLabelValue("")
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-foreground">
+                        {vLabel(v, i)}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px]"
+                        onClick={() => {
+                          setEditingLabelIndex(i)
+                          setEditingLabelValue(v?.label?.trim() || `Variation ${i + 1}`)
+                        }}
+                      >
+                        Edit title
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="space-y-2">
                 {v.description ? (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

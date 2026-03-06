@@ -25,7 +25,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { DesignVoteForm } from "@/components/design-vote-form"
-import { ChevronDown, Plus } from "lucide-react"
+import { ChevronDown, Download, Plus } from "lucide-react"
+import { downloadImage, slugify } from "@/lib/download-image"
 import { renderRichText } from "@/lib/render-rich"
 import { Label } from "@/components/ui/label"
 import {
@@ -398,11 +399,29 @@ export default function ArtefactDetailPage() {
             </span>
           </div>
           {artefact.imageUrl && (
-            <img
-              src={artefact.imageUrl}
-              alt={artefact.title}
-              className="mt-3 max-h-64 rounded-sm border border-border object-cover"
-            />
+            <div className="mt-3">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-[11px] text-muted-foreground">Image</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadImage(
+                      artefact.imageUrl!,
+                      `artefact-${slugify(artefact.title)}.jpg`,
+                    )
+                  }
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </button>
+              </div>
+              <img
+                src={artefact.imageUrl}
+                alt={artefact.title}
+                className="max-h-64 rounded-sm border border-border object-cover"
+              />
+            </div>
           )}
           {artefact.note && (
             <div className="mt-3">

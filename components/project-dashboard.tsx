@@ -35,7 +35,8 @@ import { MarkdownViewModal } from "@/components/markdown-view-modal"
 import { Badge } from "@/components/ui/badge"
 import { DesignVoteForm } from "@/components/design-vote-form"
 import Link from "next/link"
-import { ChevronDown, Plus } from "lucide-react"
+import { ChevronDown, Download, Plus } from "lucide-react"
+import { downloadImage, slugify } from "@/lib/download-image"
 import { renderRichText, richTextToPlainText } from "@/lib/render-rich"
 
 const DEFAULT_PROJECTS = [
@@ -944,9 +945,24 @@ export function ProjectDashboard() {
                 </div>
                 {artefact.imageUrl && (
                   <div className="mt-2">
-                    <p className="text-[11px] text-muted-foreground mb-0.5">
-                      Image
-                    </p>
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <p className="text-[11px] text-muted-foreground">
+                        Image
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          downloadImage(
+                            artefact.imageUrl!,
+                            `artefact-${slugify(artefact.title)}.jpg`,
+                          )
+                        }
+                        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                      >
+                        <Download className="h-3 w-3" />
+                        Download
+                      </button>
+                    </div>
                     <img
                       src={artefact.imageUrl}
                       alt={artefact.title}

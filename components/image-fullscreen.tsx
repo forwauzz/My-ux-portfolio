@@ -6,7 +6,10 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Download } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { downloadImage, slugify } from "@/lib/download-image"
 
 interface ImageFullScreenProps {
   src: string
@@ -47,7 +50,7 @@ export function ImageFullScreen({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           showCloseButton={true}
-          className="max-w-[95vw] sm:max-w-[95vw] h-[90vh] max-h-[90vh] w-full p-2 flex items-center justify-center bg-black/95 border-border"
+          className="max-w-[95vw] sm:max-w-[95vw] h-[90vh] max-h-[90vh] w-full p-2 flex flex-col items-center justify-center bg-black/95 border-border"
         >
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           <img
@@ -55,6 +58,16 @@ export function ImageFullScreen({
             alt={alt}
             className="max-w-full max-h-full w-auto h-auto object-contain rounded-sm"
           />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 text-xs gap-1.5 text-white/70 hover:text-white hover:bg-white/10"
+            onClick={() => downloadImage(src, `${slugify(alt)}.jpg`)}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </Button>
         </DialogContent>
       </Dialog>
     </>

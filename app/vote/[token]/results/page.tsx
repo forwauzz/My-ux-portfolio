@@ -60,6 +60,18 @@ export default function VoteResultsPage() {
     setVote((prev) => (prev ? { ...prev, variations: nextVariations } : prev))
   }
 
+  async function handleSaveLabel(index: number, value: string) {
+    if (!vote || !token) return
+    const nextVariations = vote.variations.map((variation, i) =>
+      i === index ? { ...variation, label: value.trim() } : variation,
+    )
+    await updateDoc(doc(db, "designVotes", token), {
+      variations: nextVariations,
+      updatedAt: new Date().toISOString(),
+    })
+    setVote((prev) => (prev ? { ...prev, variations: nextVariations } : prev))
+  }
+
   useEffect(() => {
     if (!token) {
       setLoading(false)
@@ -201,6 +213,7 @@ export default function VoteResultsPage() {
           responses={responses}
           editableDescriptions={true}
           onSaveDescription={handleSaveDescription}
+          onSaveLabel={handleSaveLabel}
         />
       </main>
     </div>
