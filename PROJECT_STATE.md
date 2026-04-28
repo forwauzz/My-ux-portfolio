@@ -40,6 +40,7 @@ Rule of thumb:
 - `/review/[token]`
 - `/review/[token]/results`
 - `/projects/[projectId]/features/[featureId]`
+- `/projects/[projectId]/tickets/[ticketId]`
 - `/projects/[projectId]/artefacts/[artefactId]`
 
 ### Current Firestore Shape
@@ -51,6 +52,7 @@ Rule of thumb:
 - `users/{uid}/projects/{projectId}/features/{featureId}/attachments`
 - `users/{uid}/projects/{projectId}/features/{featureId}/screens`
 - `users/{uid}/projects/{projectId}/features/{featureId}/screens/{screenId}/versions`
+- `users/{uid}/projects/{projectId}/tickets`
 - `users/{uid}/projects/{projectId}/artefacts`
 - `users/{uid}/projects/{projectId}/artefacts/{artefactId}/versions`
 - `featureReviews/{reviewId}`
@@ -61,6 +63,7 @@ Rule of thumb:
 
 ### Current Feature Foundation State
 - Projects now expose a `Features` section.
+- Projects now expose a `Tickets` section.
 - Users can create a feature with:
   - title
   - summary
@@ -87,6 +90,26 @@ Rule of thumb:
   - edit, delete, and reorder controls for existing screens
 - Users can generate a public feature review link from the current feature snapshot.
 - Feature workspaces now keep a review history with links back to the public review and owner results pages.
+- Users can create tickets under a project with:
+  - title
+  - description
+  - optional feature linkage
+  - status
+  - severity
+  - assignee name
+  - source
+  - optional screenshot evidence
+- Tickets can be opened on a dedicated detail page and updated through:
+  - `open`
+  - `in_progress`
+  - `done`
+  - `verified`
+- Ticket detail pages can store a dev update note and verification timestamp.
+- The project ticket list now supports quick status actions:
+  - `open` -> `in_progress`
+  - `in_progress` -> `done`
+  - `done` -> `verified`
+- `done` and `verified` are visually distinct in the list so it is easier to see what still needs confirmation.
 - Public review pages can currently show:
   - feature summary
   - attachments
@@ -422,3 +445,133 @@ Before implementing any new feature or making architecture changes:
 - update this file if requirements, structure, or sequencing changed
 
 If future implementation starts without checking this file first, the workflow is off track.
+
+## Next MVP: Ticket Tracking
+
+### Goal
+
+Track product issues and bugs per project and optionally per feature in a simple way.
+
+This should replace the current manual process where:
+- users report bugs in WhatsApp
+- screenshots and notes are scattered in chat
+- tasks are forwarded manually to a developer
+- fixes come back in chat
+- there is no reliable checklist of what was broken and what was actually fixed
+
+### MVP Principle
+
+Keep this lean.
+
+Do not start with Slack, WhatsApp, Gemini, ChatGPT, or automatic parsing integrations.
+
+The first version should work even if all ticket data is entered manually.
+
+### MVP Product Model
+
+Hierarchy:
+- Project
+- optional Feature
+- Ticket
+
+### Ticket MVP Fields
+
+- `title`
+- `description`
+- `projectId`
+- `featureId`
+  - optional
+- `status`
+  - `open`
+  - `in_progress`
+  - `done`
+  - `verified`
+- `assigneeName`
+  - optional
+- `severity`
+  - `low`
+  - `medium`
+  - `high`
+- `screenshots`
+  - optional image attachments
+- `source`
+  - optional, e.g. `WhatsApp`, `user test`, `internal QA`
+- `devUpdateNote`
+  - optional
+- `createdAt`
+- `updatedAt`
+- `verifiedAt`
+  - optional
+
+### MVP Ownership Model
+
+Start with owner-controlled updates only.
+
+That means:
+- the owner creates tickets
+- the owner assigns tickets by name
+- the developer or teammate can still report progress in Slack or WhatsApp
+- the owner updates ticket status in the app
+
+This is the simplest version and avoids permissions/auth complexity.
+
+### MVP User Flow
+
+1. Open a project
+2. Create a ticket
+3. Optionally link the ticket to a feature
+4. Add title, description, severity, screenshots, and assignee name
+5. Track status from `open` to `in_progress` to `done`
+6. After confirming the fix, mark the ticket `verified`
+
+### MVP Scope
+
+The first release should include:
+- tickets inside a project
+- optional feature linkage
+- manual ticket creation
+- screenshot upload
+- assignee name field
+- status tracking
+- simple filtering by status
+- simple checklist-like ticket list
+- ticket detail/edit flow
+
+The first release should not include:
+- Slack integration
+- WhatsApp integration
+- AI extraction from chat exports
+- public assignee update links
+- comments or threaded discussion
+- automatic notifications
+
+### MVP Routes And Placement
+
+Recommended placement:
+- add `Tickets` inside the existing `Projects` area
+- allow tickets to be filtered by feature when relevant
+
+Possible route:
+- `/projects/[projectId]/tickets/[ticketId]`
+
+### MVP Firestore Shape
+
+- `users/{uid}/projects/{projectId}/tickets/{ticketId}`
+
+### MVP Acceptance Criteria
+
+- A ticket can be created under a project
+- A ticket can optionally be linked to a feature
+- A ticket can include screenshot evidence
+- A ticket can be assigned by name
+- A ticket status can be updated through `open`, `in_progress`, `done`, and `verified`
+- The owner can clearly see what is still broken, what is claimed fixed, and what is fully verified
+
+### Deferred Follow-Up
+
+After the manual MVP is working, the next sensible enhancement is:
+- paste exported WhatsApp text into a box
+- let AI suggest tickets
+- review and confirm before saving
+
+That should come before direct integrations.

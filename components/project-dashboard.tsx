@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RichTextEditor } from "@/components/rich-text-editor"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -67,10 +68,14 @@ const FEATURE_STATUSES = [
   "Ready for Review",
   "Archived",
 ] as const
+const TICKET_STATUSES = ["open", "in_progress", "done", "verified"] as const
+const TICKET_SEVERITIES = ["low", "medium", "high"] as const
 
 type ArtefactType = (typeof ARTEFACT_TYPES)[number]
 type SourceType = (typeof SOURCES)[number]
 type FeatureStatus = (typeof FEATURE_STATUSES)[number]
+type TicketStatus = (typeof TICKET_STATUSES)[number]
+type TicketSeverity = (typeof TICKET_SEVERITIES)[number]
 
 interface Artefact {
   id: string
@@ -119,6 +124,20 @@ interface FeatureRecord {
   updatedAt: string
 }
 
+interface TicketRecord {
+  id: string
+  title: string
+  description: string
+  featureId?: string
+  status: TicketStatus
+  severity: TicketSeverity
+  assigneeName?: string
+  source?: string
+  screenshotUrls: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 export function ProjectDashboard() {
   const { user } = useAuth()
   const [projects, setProjects] = useState<ProjectRecord[]>([])
@@ -133,6 +152,21 @@ export function ProjectDashboard() {
   const [featureSummary, setFeatureSummary] = useState("")
   const [featureStatus, setFeatureStatus] = useState<FeatureStatus>("Draft")
   const [featureSaving, setFeatureSaving] = useState(false)
+  const [tickets, setTickets] = useState<TicketRecord[]>([])
+  const [ticketsLoading, setTicketsLoading] = useState(true)
+  const [ticketTitle, setTicketTitle] = useState("")
+  const [ticketDescription, setTicketDescription] = useState("")
+  const [ticketFeatureId, setTicketFeatureId] = useState("none")
+  const [ticketStatus, setTicketStatus] = useState<TicketStatus>("open")
+  const [ticketSeverity, setTicketSeverity] = useState<TicketSeverity>("medium")
+  const [ticketAssigneeName, setTicketAssigneeName] = useState("")
+  const [ticketSource, setTicketSource] = useState("")
+  const [ticketSaving, setTicketSaving] = useState(false)
+  const [ticketImageFile, setTicketImageFile] = useState<File | null>(null)
+  const [ticketImageUploading, setTicketImageUploading] = useState(false)
+  const [ticketImagePreview, setTicketImagePreview] = useState<string | null>(null)
+  const [ticketStatusFilter, setTicketStatusFilter] = useState<"all" | TicketStatus>("all")
+  const [showNewTicketForm, setShowNewTicketForm] = useState(false)
   const [form, setForm] = useState<ArtefactFormState>(emptyForm)
   const [artefacts, setArtefacts] = useState<Artefact[]>([])
   const [loading, setLoading] = useState(true)
@@ -247,6 +281,60 @@ export function ProjectDashboard() {
     }
 
     loadFeatures()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.uid, selectedProjectId, projectRefreshVersion])
+
+  useEffect(() => {
+    if (!user || !selectedProjectId) {
+      setTickets([])
+      setTicketsLoading(false)
+      return
+    }
+    let cancelled = false
+
+    async function loadTickets() {
+      setTicketsLoading(true)
+      try {
+        const col = collection(
+          db,
+          "users",
+          user.uid,
+          "projects",
+          selectedProjectId,
+          "tickets",
+        )
+        const snap = await getDocs(query(col, orderBy("createdAt", "desc")))
+        if (cancelled) return
+        setTickets(
+          snap.docs.map((d) => {
+            const data = d.data()
+            return {
+              id: d.id,
+              title: (data.title as string) ?? "",
+              description: (data.description as string) ?? "",
+              featureId: (data.featureId as string | undefined) ?? undefined,
+              status: (data.status as TicketStatus) ?? "open",
+              severity: (data.severity as TicketSeverity) ?? "medium",
+              assigneeName: (data.assigneeName as string | undefined) ?? undefined,
+              source: (data.source as string | undefined) ?? undefined,
+              screenshotUrls: Array.isArray(data.screenshotUrls)
+                ? (data.screenshotUrls as string[])
+                : [],
+              createdAt: (data.createdAt as string) ?? "",
+              updatedAt: (data.updatedAt as string) ?? "",
+            }
+          }),
+        )
+      } catch {
+        if (!cancelled) setTickets([])
+      } finally {
+        if (!cancelled) setTicketsLoading(false)
+      }
+    }
+
+    loadTickets()
     return () => {
       cancelled = true
     }
@@ -417,6 +505,68 @@ export function ProjectDashboard() {
     }
   }
 
+  async function handleCreateTicket() {
+    if (!user || !selectedProjectId || !ticketTitle.trim() || !ticketDescription.trim()) return
+    setTicketSaving(true)
+    setError(null)
+    try {
+      const col = collection(
+        db,
+        "users",
+        user.uid,
+        "projects",
+        selectedProjectId,
+        "tickets",
+      )
+      const now = new Date().toISOString()
+      const screenshotUrls: string[] = []
+
+      if (ticketImageFile) {
+        setTicketImageUploading(true)
+        try {
+          screenshotUrls.push(await uploadImage(ticketImageFile))
+        } catch {
+          throw new Error("Ticket screenshot upload failed. Check IMGBB_API_KEY and try again.")
+        }
+      }
+
+      await addDoc(col, {
+        title: ticketTitle.trim(),
+        description: ticketDescription.trim(),
+        featureId: ticketFeatureId !== "none" ? ticketFeatureId : null,
+        status: ticketStatus,
+        severity: ticketSeverity,
+        assigneeName: ticketAssigneeName.trim() || null,
+        source: ticketSource.trim() || null,
+        screenshotUrls,
+        createdAt: now,
+        updatedAt: now,
+        createdAtServer: serverTimestamp(),
+        updatedAtServer: serverTimestamp(),
+      })
+
+      setTicketTitle("")
+      setTicketDescription("")
+      setTicketFeatureId("none")
+      setTicketStatus("open")
+      setTicketSeverity("medium")
+      setTicketAssigneeName("")
+      setTicketSource("")
+      setTicketImageFile(null)
+      setTicketImagePreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      setShowNewTicketForm(false)
+      setProjectRefreshVersion((v) => v + 1)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create ticket")
+    } finally {
+      setTicketImageUploading(false)
+      setTicketSaving(false)
+    }
+  }
+
   async function handleSave() {
     if (!user || !selectedProjectId || !form.title || !form.type || !form.source) {
       return
@@ -505,11 +655,52 @@ export function ProjectDashboard() {
       if (imagePreview) {
         URL.revokeObjectURL(imagePreview)
       }
+      if (ticketImagePreview) {
+        URL.revokeObjectURL(ticketImagePreview)
+      }
     }
-  }, [imagePreview])
+  }, [imagePreview, ticketImagePreview])
 
   const renderRich = (text: string) => {
     return renderRichText(text)
+  }
+
+  const filteredTickets = useMemo(
+    () =>
+      ticketStatusFilter === "all"
+        ? tickets
+        : tickets.filter((ticket) => ticket.status === ticketStatusFilter),
+    [ticketStatusFilter, tickets],
+  )
+
+  async function handleQuickTicketStatusUpdate(ticketId: string, nextStatus: TicketStatus) {
+    if (!user || !selectedProjectId) return
+    setError(null)
+    try {
+      const now = new Date().toISOString()
+      await updateDoc(
+        doc(db, "users", user.uid, "projects", selectedProjectId, "tickets", ticketId),
+        {
+          status: nextStatus,
+          updatedAt: now,
+          updatedAtServer: serverTimestamp(),
+          verifiedAt: nextStatus === "verified" ? now : null,
+        },
+      )
+      setTickets((prev) =>
+        prev.map((ticket) =>
+          ticket.id === ticketId
+            ? {
+                ...ticket,
+                status: nextStatus,
+                updatedAt: now,
+              }
+            : ticket,
+        ),
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update ticket status")
+    }
   }
 
   async function handleSaveArtefactEdit(artefactId: string) {
@@ -714,6 +905,296 @@ export function ProjectDashboard() {
                   </Link>
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+
+        <section className="mb-6">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-4 h-px bg-accent" />
+            <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.15em]">
+              Tickets
+            </h3>
+          </div>
+          <p className="text-[11px] text-muted-foreground mb-3 max-w-2xl">
+            Track bugs and issues for this project, link them to features when needed,
+            assign them by name, and mark them through open, in progress, done, and verified.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <Select
+              value={ticketStatusFilter}
+              onValueChange={(val) => setTicketStatusFilter(val as "all" | TicketStatus)}
+            >
+              <SelectTrigger className="w-[180px] text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {TICKET_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Collapsible open={showNewTicketForm} onOpenChange={setShowNewTicketForm}>
+              <CollapsibleTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-foreground text-foreground hover:bg-foreground hover:text-background flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  New ticket
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showNewTicketForm ? "rotate-180" : ""}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="rounded-sm border border-border bg-card p-5 mt-3 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="ticket-title" className="text-xs text-muted-foreground">
+                        Ticket title
+                      </Label>
+                      <Input
+                        id="ticket-title"
+                        value={ticketTitle}
+                        onChange={(e) => setTicketTitle(e.target.value)}
+                        placeholder="E.g. Save button fails on mobile"
+                        className="text-sm"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">Link to feature</Label>
+                      <Select value={ticketFeatureId} onValueChange={setTicketFeatureId}>
+                        <SelectTrigger className="w-full text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No feature</SelectItem>
+                          {features.map((feature) => (
+                            <SelectItem key={feature.id} value={feature.id}>
+                              {feature.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">Status</Label>
+                      <Select value={ticketStatus} onValueChange={(val) => setTicketStatus(val as TicketStatus)}>
+                        <SelectTrigger className="w-full text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TICKET_STATUSES.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {status}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">Severity</Label>
+                      <Select value={ticketSeverity} onValueChange={(val) => setTicketSeverity(val as TicketSeverity)}>
+                        <SelectTrigger className="w-full text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TICKET_SEVERITIES.map((severity) => (
+                            <SelectItem key={severity} value={severity}>
+                              {severity}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="ticket-assignee" className="text-xs text-muted-foreground">
+                        Assignee name
+                      </Label>
+                      <Input
+                        id="ticket-assignee"
+                        value={ticketAssigneeName}
+                        onChange={(e) => setTicketAssigneeName(e.target.value)}
+                        placeholder="E.g. John"
+                        className="text-sm"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="ticket-source" className="text-xs text-muted-foreground">
+                        Source
+                      </Label>
+                      <Input
+                        id="ticket-source"
+                        value={ticketSource}
+                        onChange={(e) => setTicketSource(e.target.value)}
+                        placeholder="E.g. WhatsApp user test"
+                        className="text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="ticket-description" className="text-xs text-muted-foreground">
+                      Description
+                    </Label>
+                    <Textarea
+                      id="ticket-description"
+                      value={ticketDescription}
+                      onChange={(e) => setTicketDescription(e.target.value)}
+                      placeholder="Describe what broke, how to reproduce it, and what should happen instead."
+                      rows={5}
+                      className="text-sm resize-y"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="ticket-screenshot" className="text-xs text-muted-foreground">
+                      Screenshot (optional)
+                    </Label>
+                    <Input
+                      id="ticket-screenshot"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files ? e.target.files[0] ?? null : null
+                        setTicketImageFile(file)
+                        setTicketImagePreview((prev) => {
+                          if (prev) URL.revokeObjectURL(prev)
+                          return file ? URL.createObjectURL(file) : null
+                        })
+                      }}
+                      className="text-sm"
+                    />
+                    {ticketImageFile && (
+                      <p className="text-[11px] text-muted-foreground">{ticketImageFile.name}</p>
+                    )}
+                    {ticketImagePreview && (
+                      <img
+                        src={ticketImagePreview}
+                        alt="Selected ticket screenshot"
+                        className="mt-2 max-h-40 rounded-sm border border-border object-cover"
+                      />
+                    )}
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full md:w-auto border-foreground text-foreground hover:bg-foreground hover:text-background"
+                    disabled={!ticketTitle.trim() || !ticketDescription.trim() || ticketSaving || ticketImageUploading}
+                    onClick={handleCreateTicket}
+                  >
+                    {ticketSaving || ticketImageUploading ? "Saving..." : "Save ticket"}
+                  </Button>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+
+          {ticketsLoading ? (
+            <p className="text-sm text-muted-foreground">Loading tickets...</p>
+          ) : filteredTickets.length === 0 ? (
+            <div className="rounded-sm border border-dashed border-border bg-card/50 p-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                No tickets yet for this project. Create one to start tracking issues.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {filteredTickets.map((ticket) => {
+                const linkedFeature = features.find((feature) => feature.id === ticket.featureId)
+                return (
+                  <div
+                    key={ticket.id}
+                    className={`rounded-sm border-l-2 border border-border px-4 py-3 flex items-start justify-between gap-3 ${
+                      ticket.status === "verified"
+                        ? "border-l-emerald-500 bg-emerald-50/40"
+                        : ticket.status === "done"
+                          ? "border-l-amber-500 bg-amber-50/30"
+                          : "border-l-accent bg-card"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {ticket.title}
+                        </p>
+                        <Badge
+                          variant={ticket.status === "verified" ? "default" : "secondary"}
+                          className="text-[9px] px-1.5 py-0"
+                        >
+                          {ticket.status}
+                        </Badge>
+                        <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                          {ticket.severity}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-2xl line-clamp-2">
+                        {ticket.description}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {linkedFeature && (
+                          <span className="inline-flex items-center rounded-md bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                            Feature: {linkedFeature.title}
+                          </span>
+                        )}
+                        {ticket.assigneeName && (
+                          <span className="inline-flex items-center rounded-md bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                            Assignee: {ticket.assigneeName}
+                          </span>
+                        )}
+                        {ticket.source && (
+                          <span className="inline-flex items-center rounded-md bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                            Source: {ticket.source}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
+                      {ticket.status === "open" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs"
+                          onClick={() => handleQuickTicketStatusUpdate(ticket.id, "in_progress")}
+                        >
+                          Start
+                        </Button>
+                      )}
+                      {ticket.status === "in_progress" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs"
+                          onClick={() => handleQuickTicketStatusUpdate(ticket.id, "done")}
+                        >
+                          Mark done
+                        </Button>
+                      )}
+                      {ticket.status === "done" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs"
+                          onClick={() => handleQuickTicketStatusUpdate(ticket.id, "verified")}
+                        >
+                          Verify
+                        </Button>
+                      )}
+                      <Link href={`/projects/${selectedProjectId}/tickets/${ticket.id}`}>
+                        <Button size="sm" variant="ghost" className="text-xs">
+                          Open
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </section>
