@@ -25,5 +25,18 @@ service cloud.firestore {
         (request.auth != null && get(/databases/$(database)/documents/designVotes/$(voteId)).data.userId == request.auth.uid)
         || get(/databases/$(database)/documents/designVotes/$(voteId)).data.showResultsToVoters == true;
     }
+    // Feature reviews: anyone can read by token; only owner can create/update/delete
+    match /featureReviews/{reviewId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    // Feature review submissions: anyone can create; only review owner can read
+    match /featureReviewSubmissions/{reviewId}/submissions/{submissionId} {
+      allow create: if true;
+      allow read: if
+        request.auth != null &&
+        get(/databases/$(database)/documents/featureReviews/$(reviewId)).data.userId == request.auth.uid;
+    }
   }
 }

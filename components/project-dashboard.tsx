@@ -35,7 +35,7 @@ import { MarkdownViewModal } from "@/components/markdown-view-modal"
 import { Badge } from "@/components/ui/badge"
 import { DesignVoteForm } from "@/components/design-vote-form"
 import Link from "next/link"
-import { ChevronDown, Download, Plus } from "lucide-react"
+import { ChevronDown, Download, FileStack, Plus } from "lucide-react"
 import { downloadImage, slugify } from "@/lib/download-image"
 import { renderRichText, richTextToPlainText } from "@/lib/render-rich"
 
@@ -61,9 +61,16 @@ const ARTEFACT_TYPES = [
 ] as const
 
 const SOURCES = ["School", "Real Product", "Customer", "Other"] as const
+const FEATURE_STATUSES = [
+  "Draft",
+  "In Review",
+  "Ready for Review",
+  "Archived",
+] as const
 
 type ArtefactType = (typeof ARTEFACT_TYPES)[number]
 type SourceType = (typeof SOURCES)[number]
+type FeatureStatus = (typeof FEATURE_STATUSES)[number]
 
 interface Artefact {
   id: string
@@ -103,6 +110,15 @@ interface ProjectRecord {
   createdAt: string
 }
 
+interface FeatureRecord {
+  id: string
+  title: string
+  summary: string
+  status: FeatureStatus
+  createdAt: string
+  updatedAt: string
+}
+
 export function ProjectDashboard() {
   const { user } = useAuth()
   const [projects, setProjects] = useState<ProjectRecord[]>([])
@@ -111,6 +127,12 @@ export function ProjectDashboard() {
   const [projectTagline, setProjectTagline] = useState("")
   const [projectSaving, setProjectSaving] = useState(false)
   const [projectRefreshVersion, setProjectRefreshVersion] = useState(0)
+  const [features, setFeatures] = useState<FeatureRecord[]>([])
+  const [featuresLoading, setFeaturesLoading] = useState(true)
+  const [featureTitle, setFeatureTitle] = useState("")
+  const [featureSummary, setFeatureSummary] = useState("")
+  const [featureStatus, setFeatureStatus] = useState<FeatureStatus>("Draft")
+  const [featureSaving, setFeatureSaving] = useState(false)
   const [form, setForm] = useState<ArtefactFormState>(emptyForm)
   const [artefacts, setArtefacts] = useState<Artefact[]>([])
   const [loading, setLoading] = useState(true)
@@ -182,6 +204,53 @@ export function ProjectDashboard() {
       cancelled = true
     }
   }, [user?.uid, projectRefreshVersion, selectedProjectId])
+
+  useEffect(() => {
+    if (!user || !selectedProjectId) {
+      setFeatures([])
+      setFeaturesLoading(false)
+      return
+    }
+    let cancelled = false
+
+    async function loadFeatures() {
+      setFeaturesLoading(true)
+      try {
+        const col = collection(
+          db,
+          "users",
+          user.uid,
+          "projects",
+          selectedProjectId,
+          "features",
+        )
+        const snap = await getDocs(query(col, orderBy("createdAt", "desc")))
+        if (cancelled) return
+        setFeatures(
+          snap.docs.map((d) => {
+            const data = d.data()
+            return {
+              id: d.id,
+              title: (data.title as string) ?? "",
+              summary: (data.summary as string) ?? "",
+              status: (data.status as FeatureStatus) ?? "Draft",
+              createdAt: (data.createdAt as string) ?? "",
+              updatedAt: (data.updatedAt as string) ?? "",
+            }
+          }),
+        )
+      } catch {
+        if (!cancelled) setFeatures([])
+      } finally {
+        if (!cancelled) setFeaturesLoading(false)
+      }
+    }
+
+    loadFeatures()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.uid, selectedProjectId, projectRefreshVersion])
 
   useEffect(() => {
     if (!user || !selectedProjectId) {
@@ -309,6 +378,42 @@ export function ProjectDashboard() {
       setError(err instanceof Error ? err.message : "Failed to create project")
     } finally {
       setProjectSaving(false)
+    }
+  }
+
+  async function handleCreateFeature() {
+    if (!user || !selectedProjectId || !featureTitle.trim()) return
+    setFeatureSaving(true)
+    setError(null)
+    try {
+      const col = collection(
+        db,
+        "users",
+        user.uid,
+        "projects",
+        selectedProjectId,
+        "features",
+      )
+      const now = new Date().toISOString()
+      await addDoc(col, {
+        projectId: selectedProjectId,
+        title: featureTitle.trim(),
+        summary: featureSummary.trim(),
+        description: "",
+        status: featureStatus,
+        createdAt: now,
+        updatedAt: now,
+        createdAtServer: serverTimestamp(),
+        updatedAtServer: serverTimestamp(),
+      })
+      setFeatureTitle("")
+      setFeatureSummary("")
+      setFeatureStatus("Draft")
+      setProjectRefreshVersion((v) => v + 1)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create feature")
+    } finally {
+      setFeatureSaving(false)
     }
   }
 
@@ -501,6 +606,117 @@ export function ProjectDashboard() {
         </div>
 
         {error && <p className="text-sm text-destructive mb-2">{error}</p>}
+
+        <section className="mb-6">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-4 h-px bg-accent" />
+            <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.15em]">
+              Features
+            </h3>
+          </div>
+          <p className="text-[11px] text-muted-foreground mb-3 max-w-2xl">
+            Features are the new home for PRDs, grouped UI screens, version comparison,
+            and external review links.
+          </p>
+          <div className="rounded-sm border border-border bg-card p-4 mb-3 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_180px_auto] gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="feature-title" className="text-xs text-muted-foreground">
+                  Feature title
+                </Label>
+                <Input
+                  id="feature-title"
+                  value={featureTitle}
+                  onChange={(e) => setFeatureTitle(e.target.value)}
+                  placeholder="E.g. Candidate onboarding"
+                  className="text-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="feature-summary" className="text-xs text-muted-foreground">
+                  Summary
+                </Label>
+                <Input
+                  id="feature-summary"
+                  value={featureSummary}
+                  onChange={(e) => setFeatureSummary(e.target.value)}
+                  placeholder="Short overview for reviewers"
+                  className="text-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs text-muted-foreground">Status</Label>
+                <Select
+                  value={featureStatus}
+                  onValueChange={(val) => setFeatureStatus(val as FeatureStatus)}
+                >
+                  <SelectTrigger className="w-full text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FEATURE_STATUSES.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full md:w-auto text-xs"
+                  disabled={featureSaving || !featureTitle.trim()}
+                  onClick={handleCreateFeature}
+                >
+                  {featureSaving ? "Creatingâ€¦" : "Create feature"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {featuresLoading ? (
+            <p className="text-sm text-muted-foreground">Loading featuresâ€¦</p>
+          ) : features.length === 0 ? (
+            <div className="rounded-sm border border-dashed border-border bg-card/50 p-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                No features yet for this project. Create one to start the new review workflow.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {features.map((feature) => (
+                <div
+                  key={feature.id}
+                  className="rounded-sm border-l-2 border-l-accent border border-border bg-card px-4 py-3 flex items-start justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {feature.title}
+                      </p>
+                      <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                        {feature.status}
+                      </span>
+                    </div>
+                    {feature.summary && (
+                      <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
+                        {feature.summary}
+                      </p>
+                    )}
+                  </div>
+                  <Link href={`/projects/${selectedProjectId}/features/${feature.id}`}>
+                    <Button size="sm" variant="ghost" className="text-xs gap-1.5">
+                      <FileStack className="h-3.5 w-3.5" />
+                      Open
+                    </Button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         <Collapsible open={showNewArtefactForm} onOpenChange={setShowNewArtefactForm} className="mb-6">
           <CollapsibleTrigger asChild>
