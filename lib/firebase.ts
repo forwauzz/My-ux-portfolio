@@ -1,4 +1,4 @@
-import { initializeApp, getApp, getApps, type FirebaseApp } from "firebase/app"
+import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app"
 import { getAuth, type Auth } from "firebase/auth"
 import { getFirestore, type Firestore } from "firebase/firestore"
 import { getStorage, type FirebaseStorage } from "firebase/storage"
@@ -17,10 +17,31 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-const app: FirebaseApp =
-  getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
-const auth: Auth = getAuth(app)
-const db: Firestore = getFirestore(app)
-const storage: FirebaseStorage = getStorage(app)
+const REQUIRED_FIREBASE_VALUES = [
+  firebaseConfig.apiKey,
+  firebaseConfig.authDomain,
+  firebaseConfig.projectId,
+  firebaseConfig.messagingSenderId,
+  firebaseConfig.appId,
+]
 
-export { app, auth, db, storage }
+const isFirebaseConfigured = REQUIRED_FIREBASE_VALUES.every(
+  (value) => typeof value === "string" && value.trim().length > 0,
+)
+
+const firebaseConfigError =
+  "Firebase is not configured. Set the required NEXT_PUBLIC_FIREBASE_* environment variables."
+
+let app: FirebaseApp | null = null
+let auth: Auth | null = null
+let db: Firestore | null = null
+let storage: FirebaseStorage | null = null
+
+if (isFirebaseConfigured) {
+  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
+  auth = getAuth(app)
+  db = getFirestore(app)
+  storage = getStorage(app)
+}
+
+export { app, auth, db, firebaseConfigError, isFirebaseConfigured, storage }

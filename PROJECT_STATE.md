@@ -74,14 +74,17 @@ Rule of thumb:
   - inline markdown content
   - uploaded markdown files stored as inline content
   - links
+  - images
   - PDFs and other files uploaded to Firebase Storage
 - Users can add screens under a feature with:
   - title
   - description
-  - 1 to 3 versions
+  - a single image by default
+  - optional 1 to 3 versions only when comparison is needed
   - version label
   - version notes
   - version image upload
+  - edit, delete, and reorder controls for existing screens
 - Users can generate a public feature review link from the current feature snapshot.
 - Feature workspaces now keep a review history with links back to the public review and owner results pages.
 - Public review pages can currently show:
@@ -90,6 +93,9 @@ Rule of thumb:
   - screens and versions
 - Public reviewers can now:
   - enter name and optional email
+  - move through the review one screen at a time
+  - view a single UI image at a time in a large guided layout
+  - follow explicit step-by-step review instructions on the page
   - choose a favorite version per multi-version screen
   - explain why
   - add general comments per screen
@@ -103,8 +109,12 @@ Rule of thumb:
   - see favorite counts per screen version
   - replay annotations on the reviewed UI versions
   - close or reopen a review
+  - generate a teammate-ready invite message or email draft from the feature workspace
+  - use a simpler send-review dialog and a hidden-by-default review history
+  - add a single review image first, with alternative versions hidden unless explicitly enabled
 
 ### Important Current Gaps
+- Missing Firebase public env vars no longer need to crash build time, but runtime Firebase features still require valid config.
 - Rich text rendering is unsafe and should be treated as a security risk until sanitized.
 - Vote links allow public submissions but do not enforce strong duplicate-vote protection.
 - Share links do not match the older dashboard model still referenced in some components.
@@ -238,6 +248,7 @@ The first release should include:
 - Feature description
 - Feature attachments
   - markdown
+  - image
   - PDF
   - links
 - Feature screens

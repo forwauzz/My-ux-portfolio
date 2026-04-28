@@ -15,10 +15,19 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RichTextEditor } from "@/components/rich-text-editor"
@@ -33,7 +42,7 @@ import {
 import { MarkdownViewModal } from "@/components/markdown-view-modal"
 import { uploadStorageFile } from "@/lib/upload-storage-file"
 import { uploadImage } from "@/lib/upload-image"
-import { FileText, ImageIcon, Link as LinkIcon, Paperclip, Plus, X } from "lucide-react"
+import { ArrowDown, ArrowUp, FileText, ImageIcon, Link as LinkIcon, Paperclip, Pencil, Plus, Trash2, X } from "lucide-react"
 
 const FEATURE_STATUSES = [
   "Draft",
@@ -43,7 +52,7 @@ const FEATURE_STATUSES = [
 ] as const
 
 type FeatureStatus = (typeof FEATURE_STATUSES)[number]
-type FeatureAttachmentType = "markdown" | "pdf" | "link" | "other"
+type FeatureAttachmentType = "markdown" | "pdf" | "link" | "image" | "other"
 
 interface FeatureDoc {
   title: string
@@ -65,6 +74,12 @@ interface FeatureAttachment {
   sourceName?: string
   linkUrl?: string
   uploadedAt?: string
+}
+
+interface UploadedScreenVersion {
+  label: string
+  notes: string
+  imageUrl: string
 }
 
 interface ScreenVersionDraft {
@@ -107,6 +122,12 @@ interface FeatureReviewListItem {
   createdAt?: string
 }
 
+interface EditableScreenVersion {
+  id: string
+  label: string
+  notes: string
+}
+
 function emptyVersionDraft(label: string): ScreenVersionDraft {
   return {
     id: crypto.randomUUID(),
@@ -147,10 +168,20 @@ export default function FeatureDetailPage() {
   const [screenVersions, setScreenVersions] = useState<ScreenVersionDraft[]>([
     emptyVersionDraft("A"),
   ])
+  const [screenHasAlternatives, setScreenHasAlternatives] = useState(false)
+  const [editScreenId, setEditScreenId] = useState<string | null>(null)
+  const [editScreenTitle, setEditScreenTitle] = useState("")
+  const [editScreenDescription, setEditScreenDescription] = useState("")
+  const [editScreenVersions, setEditScreenVersions] = useState<EditableScreenVersion[]>([])
+  const [editScreenSaving, setEditScreenSaving] = useState(false)
   const [reviewLink, setReviewLink] = useState<string | null>(null)
   const [reviewSaving, setReviewSaving] = useState(false)
   const [reviewHistory, setReviewHistory] = useState<FeatureReviewListItem[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(true)
+  const [reviewRecipientName, setReviewRecipientName] = useState("")
+  const [reviewRecipientEmail, setReviewRecipientEmail] = useState("")
+  const [sendDialogOpen, setSendDialogOpen] = useState(false)
+  const [showReviewHistory, setShowReviewHistory] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -449,6 +480,32 @@ export default function FeatureDetailPage() {
     setScreens(screenItems)
   }
 
+  function openEditScreen(screen: FeatureScreen) {
+    setEditScreenId(screen.id)
+    setEditScreenTitle(screen.title)
+    setEditScreenDescription(screen.description)
+    setEditScreenVersions(
+      screen.versions.map((version) => ({
+        id: version.id,
+        label: version.label,
+        notes: version.notes,
+      })),
+    )
+  }
+
+  function closeEditScreen() {
+    setEditScreenId(null)
+    setEditScreenTitle("")
+    setEditScreenDescription("")
+    setEditScreenVersions([])
+  }
+
+  function updateEditScreenVersion(id: string, patch: Partial<EditableScreenVersion>) {
+    setEditScreenVersions((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    )
+  }
+
   function addScreenVersionDraft() {
     if (screenVersions.length >= 3) return
     const nextLabel = ["A", "B", "C"][screenVersions.length] ?? `V${screenVersions.length + 1}`
@@ -480,6 +537,25 @@ export default function FeatureDetailPage() {
     setScreenSaving(true)
     setError(null)
     try {
+      const now = new Date().toISOString()
+      const uploadedVersions: UploadedScreenVersion[] = []
+
+      for (let index = 0; index < usableVersions.length; index++) {
+        const version = usableVersions[index]
+        try {
+          const imageUrl = await uploadImage(version.imageFile!)
+          uploadedVersions.push({
+            label: version.label.trim() || String.fromCharCode(65 + index),
+            notes: version.notes.trim(),
+            imageUrl,
+          })
+        } catch (error) {
+          throw error instanceof Error
+            ? error
+            : new Error("Image upload failed. Check IMGBB_API_KEY and try again.")
+        }
+      }
+
       const screensCol = collection(
         db,
         "users",
@@ -491,7 +567,6 @@ export default function FeatureDetailPage() {
         "screens",
       )
       const nextOrder = screens.length + 1
-      const now = new Date().toISOString()
       const screenDoc = await addDoc(screensCol, {
         title: screenTitle.trim(),
         description: screenDescription.trim(),
@@ -515,13 +590,12 @@ export default function FeatureDetailPage() {
         "versions",
       )
 
-      for (let index = 0; index < usableVersions.length; index++) {
-        const version = usableVersions[index]
-        const imageUrl = await uploadImage(version.imageFile!)
+      for (let index = 0; index < uploadedVersions.length; index++) {
+        const version = uploadedVersions[index]
         await addDoc(versionsCol, {
-          label: version.label.trim() || String.fromCharCode(65 + index),
-          notes: version.notes.trim(),
-          imageUrl,
+          label: version.label,
+          notes: version.notes,
+          imageUrl: version.imageUrl,
           order: index + 1,
           createdAt: now,
           createdAtServer: serverTimestamp(),
@@ -531,11 +605,184 @@ export default function FeatureDetailPage() {
       setScreenTitle("")
       setScreenDescription("")
       setScreenVersions([emptyVersionDraft("A")])
+      setScreenHasAlternatives(false)
       await refreshScreens()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add screen")
     } finally {
       setScreenSaving(false)
+    }
+  }
+
+  async function handleSaveScreenEdit() {
+    if (!user || !projectId || !featureId || !editScreenId || !editScreenTitle.trim()) return
+    setEditScreenSaving(true)
+    setError(null)
+    try {
+      const now = new Date().toISOString()
+      await updateDoc(
+        doc(
+          db,
+          "users",
+          user.uid,
+          "projects",
+          projectId,
+          "features",
+          featureId,
+          "screens",
+          editScreenId,
+        ),
+        {
+          title: editScreenTitle.trim(),
+          description: editScreenDescription.trim(),
+          updatedAt: now,
+          updatedAtServer: serverTimestamp(),
+        },
+      )
+
+      await Promise.all(
+        editScreenVersions.map((version) =>
+          updateDoc(
+            doc(
+              db,
+              "users",
+              user.uid,
+              "projects",
+              projectId,
+              "features",
+              featureId,
+              "screens",
+              editScreenId,
+              "versions",
+              version.id,
+            ),
+            {
+              label: version.label.trim(),
+              notes: version.notes.trim(),
+              updatedAt: now,
+              updatedAtServer: serverTimestamp(),
+            },
+          ),
+        ),
+      )
+
+      closeEditScreen()
+      await refreshScreens()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update screen")
+    } finally {
+      setEditScreenSaving(false)
+    }
+  }
+
+  async function handleDeleteScreen(screenId: string) {
+    if (!user || !projectId || !featureId) return
+    setError(null)
+    try {
+      const batch = writeBatch(db)
+      const versionsCol = collection(
+        db,
+        "users",
+        user.uid,
+        "projects",
+        projectId,
+        "features",
+        featureId,
+        "screens",
+        screenId,
+        "versions",
+      )
+      const versionSnap = await getDocs(versionsCol)
+      versionSnap.docs.forEach((versionDoc) => batch.delete(versionDoc.ref))
+      batch.delete(
+        doc(
+          db,
+          "users",
+          user.uid,
+          "projects",
+          projectId,
+          "features",
+          featureId,
+          "screens",
+          screenId,
+        ),
+      )
+      await batch.commit()
+
+      const remainingScreens = screens
+        .filter((screen) => screen.id !== screenId)
+        .map((screen, index) => ({ ...screen, order: index + 1 }))
+      if (remainingScreens.length > 0) {
+        const reorderBatch = writeBatch(db)
+        remainingScreens.forEach((screen) => {
+          reorderBatch.update(
+            doc(
+              db,
+              "users",
+              user.uid,
+              "projects",
+              projectId,
+              "features",
+              featureId,
+              "screens",
+              screen.id,
+            ),
+            {
+              order: screen.order,
+              updatedAt: new Date().toISOString(),
+              updatedAtServer: serverTimestamp(),
+            },
+          )
+        })
+        await reorderBatch.commit()
+      }
+
+      if (editScreenId === screenId) {
+        closeEditScreen()
+      }
+      await refreshScreens()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete screen")
+    }
+  }
+
+  async function handleMoveScreen(screenId: string, direction: "up" | "down") {
+    if (!user || !projectId || !featureId) return
+    const currentIndex = screens.findIndex((screen) => screen.id === screenId)
+    if (currentIndex === -1) return
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+    if (targetIndex < 0 || targetIndex >= screens.length) return
+
+    const reordered = [...screens]
+    const [moved] = reordered.splice(currentIndex, 1)
+    reordered.splice(targetIndex, 0, moved)
+
+    try {
+      const batch = writeBatch(db)
+      reordered.forEach((screen, index) => {
+        batch.update(
+          doc(
+            db,
+            "users",
+            user.uid,
+            "projects",
+            projectId,
+            "features",
+            featureId,
+            "screens",
+            screen.id,
+          ),
+          {
+            order: index + 1,
+            updatedAt: new Date().toISOString(),
+            updatedAtServer: serverTimestamp(),
+          },
+        )
+      })
+      await batch.commit()
+      await refreshScreens()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reorder screens")
     }
   }
 
@@ -579,6 +826,14 @@ export default function FeatureDetailPage() {
           throw new Error("Add a link URL.")
         }
         baseData.linkUrl = attachmentLinkUrl.trim()
+      } else if (attachmentType === "image") {
+        if (!attachmentFile) {
+          throw new Error("Choose an image to upload.")
+        }
+        const fileUrl = await uploadImage(attachmentFile)
+        baseData.fileUrl = fileUrl
+        baseData.mimeType = attachmentFile.type || undefined
+        baseData.sourceName = attachmentFile.name
       } else {
         if (!attachmentFile) {
           throw new Error("Choose a file to upload.")
@@ -725,6 +980,27 @@ export default function FeatureDetailPage() {
     setReviewHistory(items)
   }
 
+  function buildReviewInviteMessage(link: string) {
+    const recipient = reviewRecipientName.trim() || "team"
+    const screenCount = screens.length
+    return `Hi ${recipient},
+
+Could you review this feature for me?
+
+Feature: ${title.trim() || "Untitled feature"}
+${summary.trim() ? `Summary: ${summary.trim()}` : ""}
+Screens to review: ${screenCount}
+
+Open review:
+${link}
+
+Please go screen by screen, leave short notes directly on the UI if needed, and click next until you're done.
+
+Thanks.`
+  }
+
+  const isReviewReady = title.trim().length > 0 && screens.length > 0
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -783,6 +1059,37 @@ export default function FeatureDetailPage() {
 
       <main className="mx-auto max-w-5xl px-6 py-10 space-y-6">
         {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <section className="rounded-sm border border-border bg-card p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-4 h-px bg-accent" />
+            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
+              Ready to send
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-sm border border-border bg-secondary/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Feature title</p>
+              <p className="text-sm text-foreground mt-2">
+                {title.trim() ? "Ready" : "Add a title before sending"}
+              </p>
+            </div>
+            <div className="rounded-sm border border-border bg-secondary/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Screens</p>
+              <p className="text-sm text-foreground mt-2">
+                {screens.length === 0
+                  ? "Add at least one screen"
+                  : `${screens.length} screen${screens.length === 1 ? "" : "s"} ready`}
+              </p>
+            </div>
+            <div className="rounded-sm border border-border bg-secondary/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Send review</p>
+              <p className="text-sm text-foreground mt-2">
+                {isReviewReady ? "Create link and send to teammate" : "Complete setup first"}
+              </p>
+            </div>
+          </div>
+        </section>
 
         <section className="rounded-sm border border-border bg-card p-5 space-y-4">
           <div className="flex items-center gap-3">
@@ -853,25 +1160,41 @@ export default function FeatureDetailPage() {
               External review
             </h2>
           </div>
-          <p className="text-[11px] text-muted-foreground mb-4 max-w-3xl">
-            Create a public review link from the current feature snapshot. This shares the
-            feature summary, attachments, screens, and versions without requiring sign-in.
-          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div className="rounded-sm border border-border bg-secondary/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">1. Prepare</p>
+              <p className="text-sm text-foreground mt-2">
+                Add one screen per UI with a clear title, description, and image.
+              </p>
+            </div>
+            <div className="rounded-sm border border-border bg-secondary/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">2. Create link</p>
+              <p className="text-sm text-foreground mt-2">
+                Generate a public review link from the current feature snapshot.
+              </p>
+            </div>
+            <div className="rounded-sm border border-border bg-secondary/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">3. Send teammate</p>
+              <p className="text-sm text-foreground mt-2">
+                Copy the invite or open an email draft and send it straight to your reviewer.
+              </p>
+            </div>
+          </div>
           <div className="rounded-sm border border-border bg-secondary/20 p-4 space-y-3">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 className="text-xs"
-                disabled={reviewSaving || !title.trim() || screens.length === 0}
+                disabled={reviewSaving || !isReviewReady}
                 onClick={handleCreateReviewLink}
               >
                 {reviewSaving ? "Creating link..." : "Create public review link"}
               </Button>
-              {screens.length === 0 && (
+              {!isReviewReady && (
                 <p className="text-[11px] text-muted-foreground self-center">
-                  Add at least one screen before generating a review link.
+                  Add a feature title and at least one screen before generating a review link.
                 </p>
               )}
             </div>
@@ -896,9 +1219,97 @@ export default function FeatureDetailPage() {
               </div>
             )}
 
+            {reviewLink && (
+              <div className="flex flex-wrap gap-2">
+                <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="text-xs">
+                      Send to teammate
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                      <DialogTitle>Send review</DialogTitle>
+                      <DialogDescription>
+                        Keep this simple. Add the teammate details, then copy the invite or open an email draft.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="rounded-sm border border-border bg-secondary/20 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">This review includes</p>
+                        <p className="text-sm text-foreground mt-2">
+                          {screens.length} screen{screens.length === 1 ? "" : "s"} with notes and review instructions.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor="review-recipient-name" className="text-xs text-muted-foreground">
+                            Teammate name
+                          </Label>
+                          <Input
+                            id="review-recipient-name"
+                            value={reviewRecipientName}
+                            onChange={(e) => setReviewRecipientName(e.target.value)}
+                            placeholder="E.g. Sarah"
+                            className="text-sm"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor="review-recipient-email" className="text-xs text-muted-foreground">
+                            Teammate email
+                          </Label>
+                          <Input
+                            id="review-recipient-email"
+                            type="email"
+                            value={reviewRecipientEmail}
+                            onChange={(e) => setReviewRecipientEmail(e.target.value)}
+                            placeholder="Optional"
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => navigator.clipboard.writeText(buildReviewInviteMessage(reviewLink))}
+                        >
+                          Copy invite message
+                        </Button>
+                        {reviewRecipientEmail.trim() && (
+                          <a
+                            href={`mailto:${encodeURIComponent(reviewRecipientEmail.trim())}?subject=${encodeURIComponent(`Review request: ${title.trim() || "Feature review"}`)}&body=${encodeURIComponent(buildReviewInviteMessage(reviewLink))}`}
+                          >
+                            <Button type="button" variant="ghost" size="sm" className="text-xs">
+                              Open email draft
+                            </Button>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => setShowReviewHistory((prev) => !prev)}
+                >
+                  {showReviewHistory ? "Hide review history" : "Show review history"}
+                </Button>
+              </div>
+            )}
+
             <div className="pt-2 border-t border-border/60">
               <Label className="text-xs text-muted-foreground">Review history</Label>
-              {reviewsLoading ? (
+              {!showReviewHistory ? (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Past review links are hidden by default to keep this workspace focused.
+                </p>
+              ) : reviewsLoading ? (
                 <p className="text-sm text-muted-foreground mt-2">Loading reviews...</p>
               ) : reviewHistory.length === 0 ? (
                 <p className="text-sm text-muted-foreground mt-2">
@@ -969,8 +1380,9 @@ export default function FeatureDetailPage() {
             </h2>
           </div>
           <p className="text-[11px] text-muted-foreground mb-4 max-w-3xl">
-            Group the UI into reviewable screens. Each screen can hold up to three versions
-            so reviewers can compare alternatives before picking a favorite.
+            Keep this simple: add one screen per UI you want reviewed, give it a clear
+            description, and upload one image. Add extra versions only when you want
+            reviewers to compare alternatives.
           </p>
 
           <div className="rounded-sm border border-border bg-secondary/20 p-4 space-y-4 mb-4">
@@ -995,10 +1407,38 @@ export default function FeatureDetailPage() {
                   id="screen-description"
                   value={screenDescription}
                   onChange={(e) => setScreenDescription(e.target.value)}
-                  placeholder="What reviewers should pay attention to"
+                  placeholder="What should the reviewer look for on this screen?"
                   className="text-sm"
                 />
               </div>
+            </div>
+
+            <div className="rounded-sm border border-border bg-card p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Review a single image by default</p>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Turn on alternatives only if you want the team to compare multiple versions of the same screen.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant={screenHasAlternatives ? "outline" : "ghost"}
+                size="sm"
+                className="text-xs"
+                onClick={() => {
+                  if (screenHasAlternatives) {
+                    setScreenHasAlternatives(false)
+                    setScreenVersions((prev) => [prev[0] ?? emptyVersionDraft("A")])
+                    return
+                  }
+                  setScreenHasAlternatives(true)
+                  if (screenVersions.length === 1) {
+                    setScreenVersions((prev) => [...prev, emptyVersionDraft("B")])
+                  }
+                }}
+              >
+                {screenHasAlternatives ? "Remove alternatives" : "Compare alternatives"}
+              </Button>
             </div>
 
             <div className="space-y-3">
@@ -1010,10 +1450,10 @@ export default function FeatureDetailPage() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                        Version {version.label || index + 1}
+                        {screenHasAlternatives ? `Version ${version.label || index + 1}` : "Screen image"}
                       </span>
                     </div>
-                    {screenVersions.length > 1 && (
+                    {screenHasAlternatives && screenVersions.length > 1 && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -1026,30 +1466,32 @@ export default function FeatureDetailPage() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-[120px_minmax(0,1fr)] gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs text-muted-foreground">Label</Label>
-                      <Input
-                        value={version.label}
-                        onChange={(e) =>
-                          updateScreenVersionDraft(version.id, { label: e.target.value })
-                        }
-                        placeholder="A"
-                        className="text-sm"
-                      />
+                  {screenHasAlternatives && (
+                    <div className="grid grid-cols-1 md:grid-cols-[120px_minmax(0,1fr)] gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs text-muted-foreground">Label</Label>
+                        <Input
+                          value={version.label}
+                          onChange={(e) =>
+                            updateScreenVersionDraft(version.id, { label: e.target.value })
+                          }
+                          placeholder="A"
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs text-muted-foreground">Notes</Label>
+                        <Input
+                          value={version.notes}
+                          onChange={(e) =>
+                            updateScreenVersionDraft(version.id, { notes: e.target.value })
+                          }
+                          placeholder="Optional notes for this version"
+                          className="text-sm"
+                        />
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs text-muted-foreground">Notes</Label>
-                      <Input
-                        value={version.notes}
-                        onChange={(e) =>
-                          updateScreenVersionDraft(version.id, { notes: e.target.value })
-                        }
-                        placeholder="Optional notes for this version"
-                        className="text-sm"
-                      />
-                    </div>
-                  </div>
+                  )}
 
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">Upload UI image</Label>
@@ -1072,17 +1514,19 @@ export default function FeatureDetailPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-xs gap-1.5"
-                disabled={screenVersions.length >= 3}
-                onClick={addScreenVersionDraft}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add version
-              </Button>
+              {screenHasAlternatives && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs gap-1.5"
+                  disabled={screenVersions.length >= 3}
+                  onClick={addScreenVersionDraft}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add version
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -1100,8 +1544,11 @@ export default function FeatureDetailPage() {
             <p className="text-sm text-muted-foreground">Loading screens...</p>
           ) : screens.length === 0 ? (
             <div className="rounded-sm border border-dashed border-border bg-card/50 p-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                No screens yet. Add your first UI screen and at least one version.
+              <p className="text-sm font-medium text-foreground">
+                No screens yet.
+              </p>
+              <p className="text-sm text-muted-foreground mt-2 max-w-xl mx-auto">
+                Start with one screen, one image, and one clear description. You only need extra versions if you want reviewers to compare alternatives.
               </p>
             </div>
           ) : (
@@ -1120,9 +1567,49 @@ export default function FeatureDetailPage() {
                         </p>
                       )}
                     </div>
-                    <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                      {screen.versions.length} version{screen.versions.length === 1 ? "" : "s"}
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                        {screen.versions.length} version{screen.versions.length === 1 ? "" : "s"}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px]"
+                        disabled={screen.order === 1}
+                        onClick={() => handleMoveScreen(screen.id, "up")}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px]"
+                        disabled={screen.order === screens.length}
+                        onClick={() => handleMoveScreen(screen.id, "down")}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px]"
+                        onClick={() => openEditScreen(screen)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteScreen(screen.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -1205,6 +1692,7 @@ export default function FeatureDetailPage() {
                     <SelectItem value="markdown">Markdown</SelectItem>
                     <SelectItem value="pdf">PDF</SelectItem>
                     <SelectItem value="link">Link</SelectItem>
+                    <SelectItem value="image">Image</SelectItem>
                     <SelectItem value="other">Other file</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1262,7 +1750,7 @@ export default function FeatureDetailPage() {
               </div>
             )}
 
-            {(attachmentType === "pdf" || attachmentType === "other") && (
+            {(attachmentType === "pdf" || attachmentType === "image" || attachmentType === "other") && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="attachment-file" className="text-xs text-muted-foreground">
                   Upload file
@@ -1270,7 +1758,13 @@ export default function FeatureDetailPage() {
                 <Input
                   id="attachment-file"
                   type="file"
-                  accept={attachmentType === "pdf" ? ".pdf,application/pdf" : undefined}
+                  accept={
+                    attachmentType === "pdf"
+                      ? ".pdf,application/pdf"
+                      : attachmentType === "image"
+                        ? "image/*"
+                        : undefined
+                  }
                   onChange={(e) =>
                     setAttachmentFile(e.target.files ? e.target.files[0] ?? null : null)
                   }
@@ -1381,6 +1875,96 @@ export default function FeatureDetailPage() {
             </div>
           )}
         </section>
+
+        <Dialog open={editScreenId !== null} onOpenChange={(open) => !open && closeEditScreen()}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Edit screen</DialogTitle>
+              <DialogDescription>
+                Update the screen title, description, and version notes without rebuilding the review.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="edit-screen-title" className="text-xs text-muted-foreground">
+                    Screen title
+                  </Label>
+                  <Input
+                    id="edit-screen-title"
+                    value={editScreenTitle}
+                    onChange={(e) => setEditScreenTitle(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="edit-screen-description" className="text-xs text-muted-foreground">
+                    Screen description
+                  </Label>
+                  <Input
+                    id="edit-screen-description"
+                    value={editScreenDescription}
+                    onChange={(e) => setEditScreenDescription(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {editScreenVersions.length > 0 && (
+                <div className="space-y-3">
+                  {editScreenVersions.map((version) => (
+                    <div
+                      key={version.id}
+                      className="rounded-sm border border-border bg-secondary/20 p-4 space-y-3"
+                    >
+                      <p className="text-xs font-medium text-foreground">
+                        Version {version.label}
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-[120px_minmax(0,1fr)] gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs text-muted-foreground">Label</Label>
+                          <Input
+                            value={version.label}
+                            onChange={(e) =>
+                              updateEditScreenVersion(version.id, { label: e.target.value })
+                            }
+                            className="text-sm"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs text-muted-foreground">Notes</Label>
+                          <Input
+                            value={version.notes}
+                            onChange={(e) =>
+                              updateEditScreenVersion(version.id, { notes: e.target.value })
+                            }
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={closeEditScreen}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  disabled={editScreenSaving || !editScreenTitle.trim()}
+                  onClick={handleSaveScreenEdit}
+                >
+                  {editScreenSaving ? "Saving..." : "Save changes"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <section className="rounded-sm border border-border bg-card p-5">
           <div className="flex items-center gap-3 mb-3">

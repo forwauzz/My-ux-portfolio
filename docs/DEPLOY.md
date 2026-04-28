@@ -12,6 +12,8 @@ This app runs on **Netlify** with **Next.js** and **Firebase**. Users access it 
   It is loaded from **environment variables** in Netlify, not hardcoded.
 - **ImgBB** key (`IMGBB_API_KEY`) is **server-only** (used in `/api/upload-image`).  
   Set it only in Netlify **Environment variables**; it is never sent to the browser.
+- **Feature attachments** such as PDFs and other non-image files use **Firebase Storage** from the browser.
+  That means `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` must match a real bucket and Storage CORS must be configured for your app origin.
 
 Before pushing or deploying, confirm:
 
@@ -91,6 +93,7 @@ Without this, Firebase Auth will block sign-in on the deployed URL.
 - **Site URL:** Netlify Dashboard → your site → **Site overview** (e.g. `https://your-site.netlify.app`).
 - **Future updates:** Push to `main` on GitHub; Netlify will rebuild and deploy automatically.
 - **Image uploads:** If they fail, confirm `IMGBB_API_KEY` is set in Netlify and that the key is valid in the [ImgBB API](https://api.imgbb.com/) docs.
+- **Feature file uploads:** If PDFs or other attachments fail, confirm `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` points to the correct bucket and apply the steps in [STORAGE_CORS.md](STORAGE_CORS.md).
 
 ---
 

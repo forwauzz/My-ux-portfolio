@@ -7,7 +7,7 @@ import {
   signInWithEmailAndPassword,
   type AuthError,
 } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { auth, firebaseConfigError } from "@/lib/firebase"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -52,6 +52,11 @@ export default function LoginPage() {
 
     if (!email.trim() || !password) {
       setError("Please enter email and password.")
+      return
+    }
+
+    if (!auth) {
+      setError(firebaseConfigError)
       return
     }
 

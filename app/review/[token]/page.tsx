@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useParams } from "next/navigation"
 import { addDoc, collection, doc, getDoc } from "firebase/firestore"
 import {
@@ -15,7 +15,7 @@ import { MarkdownViewModal } from "@/components/markdown-view-modal"
 import { Textarea } from "@/components/ui/textarea"
 import { FileText, Link as LinkIcon, Paperclip } from "lucide-react"
 
-type FeatureAttachmentType = "markdown" | "pdf" | "link" | "other"
+type FeatureAttachmentType = "markdown" | "pdf" | "link" | "image" | "other"
 
 interface FeatureAttachment {
   id: string
@@ -91,6 +91,8 @@ export default function FeatureReviewPage() {
   const [reviewerName, setReviewerName] = useState("")
   const [reviewerEmail, setReviewerEmail] = useState("")
   const [screenReviews, setScreenReviews] = useState<ScreenReviewState[]>([])
+  const [activeScreenIndex, setActiveScreenIndex] = useState(0)
+  const [activeVersionIds, setActiveVersionIds] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
@@ -127,6 +129,8 @@ export default function FeatureReviewPage() {
           reviewerName?: string
           reviewerEmail?: string
           screenReviews?: ScreenReviewState[]
+          activeScreenIndex?: number
+          activeVersionIds?: Record<string, string>
         }
         setReviewerName(parsed.reviewerName ?? "")
         setReviewerEmail(parsed.reviewerEmail ?? "")
@@ -140,12 +144,36 @@ export default function FeatureReviewPage() {
             }
           }),
         )
+        setActiveScreenIndex(
+          Math.min(
+            Math.max(parsed.activeScreenIndex ?? 0, 0),
+            Math.max(review.payload.screens.length - 1, 0),
+          ),
+        )
+        setActiveVersionIds(
+          review.payload.screens.reduce<Record<string, string>>((acc, screen) => {
+            const existing = parsed.screenReviews?.find((item) => item.screenId === screen.id)
+            acc[screen.id] =
+              parsed.activeVersionIds?.[screen.id] ??
+              existing?.selectedVersionId ??
+              screen.versions[0]?.id ??
+              ""
+            return acc
+          }, {}),
+        )
         return
       }
     } catch {
       // ignore local draft parsing issues
     }
     setScreenReviews(review.payload.screens.map((screen) => createInitialScreenReview(screen)))
+    setActiveVersionIds(
+      review.payload.screens.reduce<Record<string, string>>((acc, screen) => {
+        acc[screen.id] = screen.versions[0]?.id ?? ""
+        return acc
+      }, {}),
+    )
+    setActiveScreenIndex(0)
   }, [review?.payload, token])
 
   useEffect(() => {
@@ -158,49 +186,70 @@ export default function FeatureReviewPage() {
           reviewerName,
           reviewerEmail,
           screenReviews,
+          activeScreenIndex,
+          activeVersionIds,
         }),
       )
     } catch {
       // ignore local persistence failures
     }
-  }, [reviewerName, reviewerEmail, screenReviews, review?.payload, token, submitted])
+  }, [activeScreenIndex, activeVersionIds, reviewerEmail, reviewerName, review?.payload, screenReviews, submitted, token])
 
-  function updateScreenReview(
-    screenId: string,
-    patch: Partial<ScreenReviewState>,
-  ) {
+  function updateScreenReview(screenId: string, patch: Partial<ScreenReviewState>) {
     setScreenReviews((prev) =>
-      prev.map((item) =>
-        item.screenId === screenId ? { ...item, ...patch } : item,
-      ),
+      prev.map((item) => (item.screenId === screenId ? { ...item, ...patch } : item)),
     )
+  }
+
+  function validateScreen(screen: FeatureScreen, screenReview: ScreenReviewState) {
+    if (screen.versions.length > 1 && !screenReview.selectedVersionId) {
+      setError(`Choose a version for "${screen.title}" before moving on.`)
+      return false
+    }
+    return true
+  }
+
+  function handleNextScreen() {
+    if (!review?.payload) return
+    const currentScreen = review.payload.screens[activeScreenIndex]
+    const currentReview =
+      screenReviews.find((item) => item.screenId === currentScreen.id) ??
+      createInitialScreenReview(currentScreen)
+    if (!validateScreen(currentScreen, currentReview)) return
+    setError(null)
+    setActiveScreenIndex((prev) => Math.min(prev + 1, review.payload.screens.length - 1))
+  }
+
+  function handlePreviousScreen() {
+    setError(null)
+    setActiveScreenIndex((prev) => Math.max(prev - 1, 0))
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!review?.payload || !token || !reviewerName.trim()) return
-    const multiVersionScreens = review.payload.screens.filter((screen) => screen.versions.length > 1)
-    const missingChoice = multiVersionScreens.find((screen) => {
-      const screenReview = screenReviews.find((item) => item.screenId === screen.id)
-      return !screenReview?.selectedVersionId
+
+    const invalidScreen = review.payload.screens.find((screen) => {
+      const screenReview =
+        screenReviews.find((item) => item.screenId === screen.id) ?? createInitialScreenReview(screen)
+      return screen.versions.length > 1 && !screenReview.selectedVersionId
     })
-    if (missingChoice) {
-      setError(`Choose a favorite version for "${missingChoice.title}".`)
+
+    if (invalidScreen) {
+      setError(`Choose a version for "${invalidScreen.title}" before submitting.`)
+      setActiveScreenIndex(review.payload.screens.findIndex((screen) => screen.id === invalidScreen.id))
       return
     }
 
     setSubmitting(true)
     setError(null)
     try {
-      await addDoc(
-        collection(db, "featureReviewSubmissions", token, "submissions"),
-        {
-          reviewerName: reviewerName.trim(),
-          reviewerEmail: reviewerEmail.trim() || null,
-          screenReviews,
-          submittedAt: new Date().toISOString(),
-        },
-      )
+      await addDoc(collection(db, "featureReviewSubmissions", token, "submissions"), {
+        reviewerName: reviewerName.trim(),
+        reviewerEmail: reviewerEmail.trim() || null,
+        screenReviews,
+        submittedAt: new Date().toISOString(),
+      })
       setSubmitted(true)
       try {
         localStorage.setItem(`feature_review_submitted_${token}`, "1")
@@ -215,6 +264,28 @@ export default function FeatureReviewPage() {
     }
   }
 
+  const payload = review?.payload
+  const isClosed = review?.status === "closed"
+  const screens = payload?.screens ?? []
+  const currentScreen = screens[activeScreenIndex]
+  const currentReview =
+    currentScreen
+      ? screenReviews.find((item) => item.screenId === currentScreen.id) ??
+        createInitialScreenReview(currentScreen)
+      : null
+  const currentVersion = currentScreen
+    ? currentScreen.versions.find((version) => version.id === activeVersionIds[currentScreen.id]) ??
+      currentScreen.versions[0]
+    : null
+  const progressLabel =
+    currentScreen && screens.length > 0 ? `${activeScreenIndex + 1} of ${screens.length}` : "0 of 0"
+  const completionCount = screens.filter((screen) => {
+    const item = screenReviews.find((reviewItem) => reviewItem.screenId === screen.id)
+    return screen.versions.length === 1 || Boolean(item?.selectedVersionId)
+  }).length
+
+  const attachmentPreview = useMemo(() => (payload?.attachments ?? []).slice(0, 4), [payload?.attachments])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -223,16 +294,21 @@ export default function FeatureReviewPage() {
     )
   }
 
-  if (error || !review?.payload) {
+  if (error && !payload) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <p className="text-sm text-destructive">{error ?? "Nothing to review"}</p>
+        <p className="text-sm text-destructive">{error}</p>
       </div>
     )
   }
 
-  const payload = review.payload
-  const isClosed = review.status === "closed"
+  if (!payload) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <p className="text-sm text-destructive">Nothing to review.</p>
+      </div>
+    )
+  }
 
   if (submitted) {
     return (
@@ -249,9 +325,7 @@ export default function FeatureReviewPage() {
           <p className="text-sm font-medium text-foreground">
             Thanks, {reviewerName || "reviewer"}. Your feedback was recorded.
           </p>
-          <p className="text-sm text-muted-foreground">
-            You can close this page.
-          </p>
+          <p className="text-sm text-muted-foreground">You can close this page.</p>
         </main>
       </div>
     )
@@ -260,23 +334,28 @@ export default function FeatureReviewPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border">
-        <div className="mx-auto max-w-5xl px-6 py-4 flex items-center justify-between gap-3">
-          <div>
+        <div className="mx-auto max-w-[1700px] px-4 md:px-6 py-4 flex items-center justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-xs font-medium tracking-[0.2em] uppercase text-muted-foreground">
               Feature review
             </h1>
-            <p className="text-sm text-foreground mt-1">{payload.title}</p>
+            <p className="text-base md:text-lg font-medium text-foreground mt-1 truncate">
+              {payload.title}
+            </p>
           </div>
-          {isClosed && (
-            <span className="text-xs font-medium text-destructive uppercase">
-              Closed
-            </span>
-          )}
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-[11px] text-muted-foreground">{completionCount}/{screens.length} ready</span>
+            {isClosed && (
+              <span className="text-xs font-medium text-destructive uppercase">
+                Closed
+              </span>
+            )}
+          </div>
         </div>
         <div className="h-px bg-accent" />
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-10 space-y-8">
+      <main className="mx-auto max-w-[1700px] px-4 md:px-6 py-6 md:py-8 space-y-6">
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         {isClosed ? (
@@ -286,275 +365,317 @@ export default function FeatureReviewPage() {
             </p>
           </section>
         ) : (
-          <section className="rounded-sm border border-border bg-card p-5 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-4 h-px bg-accent" />
-              <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
-                Reviewer details
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reviewer-name" className="text-xs text-muted-foreground">
-                  Your name
-                </Label>
-                <Input
-                  id="reviewer-name"
-                  value={reviewerName}
-                  onChange={(e) => setReviewerName(e.target.value)}
-                  placeholder="Name"
-                  className="text-sm"
-                />
+          <section className="rounded-sm border border-border bg-card p-4 md:p-5 space-y-4">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.8fr)] gap-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-px bg-accent" />
+                  <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
+                    Review context
+                  </h2>
+                </div>
+                {payload.summary && <p className="text-sm text-foreground">{payload.summary}</p>}
+                {payload.description && (
+                  <MarkdownViewModal
+                    content={payload.description}
+                    title={`${payload.title} description`}
+                    trigger={
+                      <span className="inline-flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5" />
+                        Open full description
+                      </span>
+                    }
+                    triggerClassName="h-8 px-3 text-xs text-muted-foreground hover:text-foreground"
+                  />
+                )}
+                {attachmentPreview.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {attachmentPreview.map((attachment) => (
+                      <AttachmentAction key={attachment.id} attachment={attachment} />
+                    ))}
+                  </div>
+                )}
+                <div className="rounded-sm border border-border bg-secondary/20 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                    What to do
+                  </p>
+                  <div className="mt-2 space-y-1.5 text-sm text-foreground">
+                    <p>1. Review the screen shown below.</p>
+                    <p>2. Add short notes on the image or in the feedback panel.</p>
+                    <p>3. Click next and continue until you submit.</p>
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reviewer-email" className="text-xs text-muted-foreground">
-                  Email (optional)
-                </Label>
-                <Input
-                  id="reviewer-email"
-                  type="email"
-                  value={reviewerEmail}
-                  onChange={(e) => setReviewerEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="text-sm"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="reviewer-name" className="text-xs text-muted-foreground">
+                    Your name
+                  </Label>
+                  <Input
+                    id="reviewer-name"
+                    value={reviewerName}
+                    onChange={(e) => setReviewerName(e.target.value)}
+                    placeholder="Name"
+                    className="text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="reviewer-email" className="text-xs text-muted-foreground">
+                    Email
+                  </Label>
+                  <Input
+                    id="reviewer-email"
+                    type="email"
+                    value={reviewerEmail}
+                    onChange={(e) => setReviewerEmail(e.target.value)}
+                    placeholder="Optional"
+                    className="text-sm"
+                  />
+                </div>
               </div>
             </div>
           </section>
         )}
 
-        <section className="rounded-sm border border-border bg-card p-5 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-4 h-px bg-accent" />
-            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
-              Feature summary
-            </h2>
-          </div>
-          {payload.summary && (
-            <p className="text-sm text-foreground">{payload.summary}</p>
-          )}
-          {payload.description && (
-            <div className="flex items-center gap-2">
-              <MarkdownViewModal
-                content={payload.description}
-                title={`${payload.title} description`}
-                trigger={
-                  <span className="inline-flex items-center gap-1.5">
-                    <FileText className="h-3.5 w-3.5" />
-                    Open full description
-                  </span>
-                }
-                triggerClassName="h-8 px-3 text-xs text-muted-foreground hover:text-foreground"
-              />
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-sm border border-border bg-card p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-4 h-px bg-accent" />
-            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
-              Attachments
-            </h2>
-          </div>
-          {payload.attachments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No attachments attached to this review.</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {payload.attachments.map((attachment) => (
-                <div
-                  key={attachment.id}
-                  className="rounded-sm border border-border bg-secondary/20 px-4 py-3 flex items-start justify-between gap-3"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">{attachment.title}</p>
-                      <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                        {attachment.type}
-                      </span>
-                    </div>
-                    {attachment.sourceName && (
-                      <p className="text-[11px] text-muted-foreground mt-1">{attachment.sourceName}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {attachment.type === "markdown" && attachment.content ? (
-                      <MarkdownViewModal
-                        content={attachment.content}
-                        title={attachment.title}
-                        trigger={
-                          <span className="inline-flex items-center gap-1.5">
-                            <FileText className="h-3.5 w-3.5" />
-                            View
-                          </span>
-                        }
-                        triggerClassName="h-8 px-3 text-xs text-muted-foreground hover:text-foreground"
-                      />
-                    ) : attachment.type === "link" && attachment.linkUrl ? (
-                      <a
-                        href={attachment.linkUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        <LinkIcon className="h-3.5 w-3.5" />
-                        Open
-                      </a>
-                    ) : attachment.fileUrl ? (
-                      <a
-                        href={attachment.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        <Paperclip className="h-3.5 w-3.5" />
-                        Open file
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-sm border border-border bg-card p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-4 h-px bg-accent" />
-            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
-              Screens
-            </h2>
-          </div>
-          {payload.screens.length === 0 ? (
+        {screens.length === 0 || !currentScreen || !currentReview || !currentVersion ? (
+          <section className="rounded-sm border border-border bg-card p-5">
             <p className="text-sm text-muted-foreground">No screens in this review yet.</p>
-          ) : (
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              {payload.screens.map((screen) => (
-                <section
-                  key={screen.id}
-                  className="rounded-sm border border-border bg-secondary/20 p-4 space-y-4"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{screen.title}</p>
-                    {screen.description && (
-                      <p className="text-xs text-muted-foreground mt-1">{screen.description}</p>
-                    )}
+          </section>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <section className="rounded-sm border border-border bg-card p-4 md:p-5 space-y-4">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                    Screen {progressLabel}
+                  </p>
+                  <h2 className="text-xl md:text-2xl font-medium text-foreground mt-1">
+                    {currentScreen.title}
+                  </h2>
+                  {currentScreen.description && (
+                    <p className="text-base text-muted-foreground mt-2 max-w-4xl">
+                      {currentScreen.description}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                    Current view
+                  </p>
+                  <p className="text-sm text-foreground mt-1">Version {currentVersion.label}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,8.8fr)_380px] gap-4 items-start">
+                <div className="rounded-sm border border-border bg-secondary/20 p-3 md:p-4 space-y-3">
+                  <FeatureImageAnnotationEditor
+                    imageUrl={currentVersion.imageUrl}
+                    alt={`${currentScreen.title} version ${currentVersion.label}`}
+                    versionId={currentVersion.id}
+                    annotations={currentReview.annotations}
+                    disabled={isClosed}
+                    onChange={(annotations) =>
+                      updateScreenReview(currentScreen.id, { annotations })
+                    }
+                  />
+                  {currentVersion.notes && (
+                    <p className="text-xs text-muted-foreground">{currentVersion.notes}</p>
+                  )}
+                </div>
+
+                <aside className="rounded-sm border border-border bg-secondary/20 p-4 space-y-4 xl:sticky xl:top-4">
+                  <div className="space-y-1">
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                      Your feedback
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Keep this lightweight. Leave a few direct notes, then move to the next screen.
+                    </p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {screen.versions.map((version) => {
-                      const currentReview =
-                        screenReviews.find((item) => item.screenId === screen.id) ??
-                        createInitialScreenReview(screen)
-                      return (
-                      <label
-                        key={version.id}
-                        className={`rounded-sm border bg-card p-3 space-y-2 cursor-pointer ${
-                          currentReview.selectedVersionId === version.id
-                            ? "border-accent ring-1 ring-accent/30"
-                            : "border-border"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+
+                  {currentScreen.versions.length > 1 && !isClosed && (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">
+                        Which version works best?
+                      </Label>
+                      <div className="flex flex-col gap-2">
+                        {currentScreen.versions.map((version) => (
+                          <button
+                            key={version.id}
+                            type="button"
+                            className={`rounded-sm border px-3 py-2 text-left text-sm ${
+                              currentReview.selectedVersionId === version.id
+                                ? "border-accent bg-background"
+                                : "border-border bg-card"
+                            }`}
+                            onClick={() =>
+                              updateScreenReview(currentScreen.id, {
+                                selectedVersionId: version.id,
+                              })
+                            }
+                          >
                             Version {version.label}
-                          </span>
-                          {screen.versions.length > 1 && !isClosed && (
-                            <input
-                              type="radio"
-                              name={`screen-${screen.id}-favorite`}
-                              checked={currentReview.selectedVersionId === version.id}
-                              onChange={() =>
-                                updateScreenReview(screen.id, { selectedVersionId: version.id })
-                              }
-                              className="accent-accent h-3.5 w-3.5"
-                            />
-                          )}
-                        </div>
-                        <FeatureImageAnnotationEditor
-                          imageUrl={version.imageUrl}
-                          alt={`${screen.title} version ${version.label}`}
-                          versionId={version.id}
-                          annotations={currentReview.annotations}
-                          disabled={isClosed}
-                          onChange={(annotations) =>
-                            updateScreenReview(screen.id, { annotations })
-                          }
-                        />
-                        {version.notes && (
-                          <p className="text-xs text-muted-foreground">{version.notes}</p>
-                        )}
-                      </label>
-                    )})}
-                  </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {currentScreen.versions.length > 1 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Viewing</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {currentScreen.versions.map((version) => (
+                          <button
+                            key={version.id}
+                            type="button"
+                            className={`rounded-sm border px-2.5 py-1.5 text-xs ${
+                              currentVersion.id === version.id
+                                ? "border-accent bg-background text-foreground"
+                                : "border-border bg-card text-muted-foreground"
+                            }`}
+                            onClick={() =>
+                              setActiveVersionIds((prev) => ({
+                                ...prev,
+                                [currentScreen.id]: version.id,
+                              }))
+                            }
+                          >
+                            {version.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {!isClosed && (
-                    <div className="space-y-3">
-                      <p className="text-[11px] text-muted-foreground">
-                        Add pins, boxes, arrows, or text directly on any version, then capture
-                        your written feedback below.
-                      </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1.5">
+                    <>
+                      <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">
-                          Why this version?
+                          Why this works
                         </Label>
                         <Textarea
-                          value={
-                            screenReviews.find((item) => item.screenId === screen.id)
-                              ?.selectionReason ?? ""
-                          }
+                          value={currentReview.selectionReason}
                           onChange={(e) =>
-                            updateScreenReview(screen.id, {
+                            updateScreenReview(currentScreen.id, {
                               selectionReason: e.target.value,
                             })
                           }
-                          placeholder="Explain why this version works best..."
-                          rows={4}
+                          placeholder="Short reasoning"
+                          rows={5}
                           className="text-sm resize-none"
                         />
                       </div>
-                      <div className="flex flex-col gap-1.5">
+
+                      <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">
-                          General comments
+                          Extra notes
                         </Label>
                         <Textarea
-                          value={
-                            screenReviews.find((item) => item.screenId === screen.id)
-                              ?.generalComment ?? ""
-                          }
+                          value={currentReview.generalComment}
                           onChange={(e) =>
-                            updateScreenReview(screen.id, {
+                            updateScreenReview(currentScreen.id, {
                               generalComment: e.target.value,
                             })
                           }
-                          placeholder="Additional feedback for this screen..."
-                          rows={4}
+                          placeholder="Anything else?"
+                          rows={5}
                           className="text-sm resize-none"
                         />
                       </div>
-                    </div>
-                    </div>
+                    </>
                   )}
-                </section>
-              ))}
-              {!isClosed && payload.screens.length > 0 && (
-                <div className="flex items-center gap-3 pt-2">
+                </aside>
+              </div>
+            </section>
+
+            <section className="rounded-sm border border-border bg-card px-4 py-3 md:px-5 md:py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div className="text-[11px] text-muted-foreground">
+                Draft changes stay in this browser until you submit.
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-xs"
+                  disabled={activeScreenIndex === 0}
+                  onClick={handlePreviousScreen}
+                >
+                  Previous
+                </Button>
+                {activeScreenIndex < screens.length - 1 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-xs border-foreground text-foreground hover:bg-foreground hover:text-background"
+                    disabled={!reviewerName.trim() || isClosed}
+                    onClick={handleNextScreen}
+                  >
+                    Next screen
+                  </Button>
+                ) : (
                   <Button
                     type="submit"
                     variant="outline"
                     className="text-xs border-foreground text-foreground hover:bg-foreground hover:text-background"
-                    disabled={!reviewerName.trim() || submitting}
+                    disabled={!reviewerName.trim() || submitting || isClosed}
                   >
                     {submitting ? "Submitting..." : "Submit review"}
                   </Button>
-                  <p className="text-[11px] text-muted-foreground">
-                    Draft changes are saved in this browser until you submit.
-                  </p>
-                </div>
-              )}
-            </form>
-          )}
-        </section>
+                )}
+              </div>
+            </section>
+          </form>
+        )}
       </main>
     </div>
   )
+}
+
+function AttachmentAction({ attachment }: { attachment: FeatureAttachment }) {
+  if (attachment.type === "markdown" && attachment.content) {
+    return (
+      <MarkdownViewModal
+        content={attachment.content}
+        title={attachment.title}
+        trigger={
+          <span className="inline-flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5" />
+            {attachment.title}
+          </span>
+        }
+        triggerClassName="h-8 px-3 text-xs text-muted-foreground hover:text-foreground"
+      />
+    )
+  }
+
+  if (attachment.type === "link" && attachment.linkUrl) {
+    return (
+      <a
+        href={attachment.linkUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-card px-3 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <LinkIcon className="h-3.5 w-3.5" />
+        {attachment.title}
+      </a>
+    )
+  }
+
+  if (attachment.fileUrl) {
+    return (
+      <a
+        href={attachment.fileUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border bg-card px-3 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <Paperclip className="h-3.5 w-3.5" />
+        {attachment.title}
+      </a>
+    )
+  }
+
+  return null
 }
