@@ -30,7 +30,7 @@ export default function FeaturesPage() {
   return (
     <AppShell
       title="Features"
-      description="Browse features across all projects, then filter by project or status when you need focus."
+      description="Select a project, create a feature in a wide guided flow, and decide the exact order your team will review."
     >
       <FeaturesOverview />
     </AppShell>

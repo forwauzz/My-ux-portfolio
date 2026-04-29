@@ -93,6 +93,12 @@ Rule of thumb:
 - Cross-project `Features` and `Tickets` pages now group results by project and expose more project context at a glance.
 - Cross-project `Features` and `Tickets` pages now also support lean create forms so a feature or ticket can be created directly from the left nav.
 - Those create forms now use the same project source as the project workspace so features and tickets can be tied to any available project, not just the currently filtered one.
+- The `Features` route is now moving toward a project-first workflow:
+  - left main navigation
+  - sub-navigation for projects inside the features workspace
+  - a wide feature-creation canvas
+  - a guided multi-step flow for basics, screens, and review order
+  - drag-and-drop screen ordering before save
 - The left-nav shell and cross-project overview pages now use shared workspace surface styles for more consistent visual hierarchy.
 - Projects now expose a `Features` section.
 - Projects now expose a `Tickets` section.
