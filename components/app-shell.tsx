@@ -117,6 +117,21 @@ export function AppShell({
               )
             })}
           </nav>
+          <div className="px-5 pb-4">
+            <p className="workspace-section-label mb-2">Quick create</p>
+            <div className="flex flex-col gap-2">
+              <Link href="/features?new=1">
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs">
+                  New feature
+                </Button>
+              </Link>
+              <Link href="/tickets?new=1">
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs">
+                  New ticket
+                </Button>
+              </Link>
+            </div>
+          </div>
           <div className="px-5 py-4 border-t border-border/70">
             <p className="text-[11px] text-muted-foreground">
               Use `Ctrl/Cmd + K` to jump to saved ideas or vault notes.

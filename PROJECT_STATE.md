@@ -77,6 +77,9 @@ Rule of thumb:
   - `Tickets`
   - `Knowledge Vault`
   - `Ideas`
+- The left nav now also exposes direct quick-create actions for:
+  - `New feature`
+  - `New ticket`
 - `Projects` is now a lighter project directory and workspace entry point.
 - The `Projects` page now prioritizes:
   - project selection
@@ -88,6 +91,8 @@ Rule of thumb:
 - `Tickets` is now a cross-project view.
 - Project summary shortcuts now deep-link into filtered `/features` and `/tickets` views for the selected project.
 - Cross-project `Features` and `Tickets` pages now group results by project and expose more project context at a glance.
+- Cross-project `Features` and `Tickets` pages now also support lean create forms so a feature or ticket can be created directly from the left nav.
+- Those create forms now use the same project source as the project workspace so features and tickets can be tied to any available project, not just the currently filtered one.
 - The left-nav shell and cross-project overview pages now use shared workspace surface styles for more consistent visual hierarchy.
 - Projects now expose a `Features` section.
 - Projects now expose a `Tickets` section.
