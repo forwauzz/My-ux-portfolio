@@ -99,11 +99,11 @@
   }
 
   .workspace-panel {
-    @apply rounded-sm border border-border bg-card shadow-[0_1px_0_rgba(44,44,44,0.03)];
+    @apply rounded-sm border border-border/90 bg-card shadow-[0_1px_0_rgba(44,44,44,0.05)];
   }
 
   .workspace-panel-soft {
-    @apply rounded-sm border border-border bg-secondary/20;
+    @apply rounded-sm border border-border/90 bg-secondary/20;
   }
 
   .workspace-stat {
@@ -111,6 +111,6 @@
   }
 
   .workspace-section-label {
-    @apply text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground;
+    @apply text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground;
   }
 }

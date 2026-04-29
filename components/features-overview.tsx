@@ -26,9 +26,12 @@ import {
 } from "@/components/ui/select"
 import { uploadStorageFile } from "@/lib/upload-storage-file"
 import { uploadImage } from "@/lib/upload-image"
+import { ImageFullScreen } from "@/components/image-fullscreen"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
 type FeatureStatus = "Draft" | "In Review" | "Ready for Review" | "Archived"
 type AttachmentType = "markdown" | "file" | "link"
+type ScreenSection = "A" | "B" | "C" | "D"
 
 const DEFAULT_PROJECTS = [
   {
@@ -73,7 +76,15 @@ interface ScreenDraft {
   description: string
   imageFile: File | null
   imagePreview: string | null
+  section: ScreenSection
 }
+
+const REVIEW_SECTIONS: { id: ScreenSection; label: string; subtitle: string }[] = [
+  { id: "A", label: "A", subtitle: "Start here" },
+  { id: "B", label: "B", subtitle: "Next" },
+  { id: "C", label: "C", subtitle: "Then" },
+  { id: "D", label: "D", subtitle: "Final" },
+]
 
 function emptyAttachmentDraft(): AttachmentDraft {
   return {
@@ -93,6 +104,7 @@ function emptyScreenDraft(): ScreenDraft {
     description: "",
     imageFile: null,
     imagePreview: null,
+    section: "A",
   }
 }
 
@@ -115,6 +127,7 @@ export function FeaturesOverview() {
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [projectsCollapsed, setProjectsCollapsed] = useState(false)
 
   useEffect(() => {
     const projectParam = searchParams.get("project")
@@ -207,6 +220,15 @@ export function FeaturesOverview() {
     [features, selectedProjectId],
   )
 
+  const groupedScreenDrafts = useMemo(
+    () =>
+      REVIEW_SECTIONS.map((section) => ({
+        ...section,
+        items: screenDrafts.filter((screen) => screen.section === section.id),
+      })),
+    [screenDrafts],
+  )
+
   function resetCreateFlow() {
     setShowCreate(false)
     setCreateStep(1)
@@ -263,6 +285,41 @@ export function FeaturesOverview() {
       const next = [...prev]
       const [dragged] = next.splice(draggedIndex, 1)
       next.splice(targetIndex, 0, dragged)
+      return next
+    })
+  }
+
+  function moveScreenDraftToSection(
+    draggedId: string,
+    targetSection: ScreenSection,
+    targetId?: string,
+  ) {
+    setScreenDrafts((prev) => {
+      const draggedIndex = prev.findIndex((item) => item.id === draggedId)
+      if (draggedIndex === -1) return prev
+      const next = [...prev]
+      const [dragged] = next.splice(draggedIndex, 1)
+      const updatedDragged = { ...dragged, section: targetSection }
+
+      if (!targetId) {
+        const sectionIndexes = next
+          .map((item, index) => ({ item, index }))
+          .filter(({ item }) => item.section === targetSection)
+        if (sectionIndexes.length === 0) {
+          next.push(updatedDragged)
+          return next
+        }
+        const insertIndex = sectionIndexes[sectionIndexes.length - 1].index + 1
+        next.splice(insertIndex, 0, updatedDragged)
+        return next
+      }
+
+      const targetIndex = next.findIndex((item) => item.id === targetId)
+      if (targetIndex === -1) {
+        next.push(updatedDragged)
+        return next
+      }
+      next.splice(targetIndex, 0, updatedDragged)
       return next
     })
   }
@@ -364,6 +421,7 @@ export function FeaturesOverview() {
           {
             title: screen.title.trim(),
             description: screen.description.trim(),
+            section: screen.section,
             order: index + 1,
             createdAt: now,
             updatedAt: now,
@@ -411,9 +469,24 @@ export function FeaturesOverview() {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
-      <aside className="lg:w-52 shrink-0">
+      <aside className={`${projectsCollapsed ? "lg:w-14" : "lg:w-56"} shrink-0 transition-all`}>
         <div className="workspace-panel p-3 space-y-2">
-          <p className="workspace-section-label px-2">Projects</p>
+          <div className="flex items-center justify-between gap-2">
+            {!projectsCollapsed && <p className="workspace-section-label px-2">Projects</p>}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 px-0"
+              onClick={() => setProjectsCollapsed((prev) => !prev)}
+            >
+              {projectsCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
           <div className="flex flex-row flex-wrap gap-1 lg:flex-col">
             {projects.map((project) => (
               <button
@@ -423,13 +496,14 @@ export function FeaturesOverview() {
                   setSelectedProjectId(project.id)
                   setCreateError(null)
                 }}
-                className={`rounded-sm px-3 py-2 text-left text-sm transition-colors ${
+                className={`rounded-sm ${projectsCollapsed ? "px-2 py-3 text-center text-xs" : "px-3 py-2 text-left text-sm"} transition-colors ${
                   selectedProjectId === project.id
                     ? "bg-secondary text-foreground border border-border font-medium"
                     : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground border border-transparent"
                 }`}
+                title={project.name}
               >
-                {project.name}
+                {projectsCollapsed ? project.name.charAt(0) : project.name}
               </button>
             ))}
           </div>
@@ -446,8 +520,8 @@ export function FeaturesOverview() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="workspace-section-label">{selectedProject.name}</p>
-                <p className="text-2xl font-medium text-foreground mt-2">Create feature</p>
-                <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
+                <p className="text-3xl font-medium text-foreground mt-2">Create feature</p>
+                <p className="text-base text-muted-foreground mt-2 max-w-2xl leading-7">
                   Keep this wide and simple. Answer a few questions, add your UI, then decide the order your team should review.
                 </p>
               </div>
@@ -464,10 +538,10 @@ export function FeaturesOverview() {
               ].map((item) => (
                 <div
                   key={item.step}
-                  className={`rounded-sm border px-4 py-3 text-sm ${
+                  className={`rounded-sm border-2 px-4 py-3 text-base ${
                     createStep === item.step
                       ? "border-accent bg-secondary text-foreground"
-                      : "border-border bg-card text-muted-foreground"
+                      : "border-border/90 bg-card text-muted-foreground"
                   }`}
                 >
                   {item.step}. {item.label}
@@ -679,11 +753,16 @@ export function FeaturesOverview() {
                         </div>
                         <div className="workspace-panel-soft p-3 flex items-center justify-center min-h-[220px]">
                           {screen.imagePreview ? (
-                            <img
+                            <ImageFullScreen
                               src={screen.imagePreview}
                               alt={screen.title || "Screen preview"}
-                              className="max-h-[220px] w-auto rounded-sm object-contain"
-                            />
+                            >
+                              <img
+                                src={screen.imagePreview}
+                                alt={screen.title || "Screen preview"}
+                                className="max-h-[220px] w-auto rounded-sm object-contain cursor-zoom-in"
+                              />
+                            </ImageFullScreen>
                           ) : (
                             <p className="text-sm text-muted-foreground text-center">
                               Upload an image to preview it here.
@@ -714,48 +793,115 @@ export function FeaturesOverview() {
               <div className="space-y-6">
                 <div>
                   <p className="text-sm text-foreground">
-                    Drag the UI cards into the order you want your team to review them.
+                    Open canvas. Drag the UI cards into sections and set the exact review sequence.
                   </p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    This order becomes the exact presentation order on the public review link.
+                    Use sections `A` to `D` to group the flow, then reorder inside each section. The final sequence becomes the exact presentation order on the public review link.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {screenDrafts.map((screen, index) => (
-                    <div
-                      key={screen.id}
-                      draggable
-                      onDragStart={() => setDraggedScreenId(screen.id)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={() => {
-                        if (draggedScreenId) {
-                          moveScreenDraft(draggedScreenId, screen.id)
-                        }
-                        setDraggedScreenId(null)
-                      }}
-                      className="workspace-panel-soft border-2 border-accent/50 p-4 space-y-3 cursor-move"
-                    >
-                      <p className="workspace-section-label">Order {index + 1}</p>
-                      <div className="workspace-panel p-3 min-h-[220px] flex items-center justify-center">
-                        {screen.imagePreview ? (
-                          <img
-                            src={screen.imagePreview}
-                            alt={screen.title || "Screen preview"}
-                            className="max-h-[200px] w-auto rounded-sm object-contain"
-                          />
+                <div className="workspace-panel-soft p-5 md:p-6 space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    {groupedScreenDrafts.map((section) => (
+                      <div
+                        key={section.id}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => {
+                          if (draggedScreenId) {
+                            moveScreenDraftToSection(draggedScreenId, section.id)
+                          }
+                          setDraggedScreenId(null)
+                        }}
+                        className="workspace-panel min-h-[460px] p-4 space-y-3 border-2"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="workspace-section-label">Section {section.label}</p>
+                            <p className="text-sm text-muted-foreground mt-1">{section.subtitle}</p>
+                          </div>
+                          <span className="inline-flex items-center rounded-md bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                            {section.items.length}
+                          </span>
+                        </div>
+
+                        {section.items.length === 0 ? (
+                          <div className="h-[360px] rounded-sm border border-dashed border-border flex items-center justify-center p-4 text-center">
+                            <p className="text-sm text-muted-foreground">
+                              Drop images here to place them in section {section.label}.
+                            </p>
+                          </div>
                         ) : (
-                          <p className="text-sm text-muted-foreground">No image yet</p>
+                          <div className="space-y-3">
+                            {section.items.map((screen) => {
+                              const absoluteOrder = screenDrafts.findIndex((item) => item.id === screen.id) + 1
+                              return (
+                                <div
+                                  key={screen.id}
+                                  draggable
+                                  onDragStart={() => setDraggedScreenId(screen.id)}
+                                  onDragOver={(event) => event.preventDefault()}
+                                  onDrop={() => {
+                                    if (draggedScreenId) {
+                                      moveScreenDraftToSection(draggedScreenId, section.id, screen.id)
+                                    }
+                                    setDraggedScreenId(null)
+                                  }}
+                                  className="workspace-panel-soft border-2 border-accent p-3 space-y-3 cursor-move"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-sm font-medium text-foreground">Order {absoluteOrder}</p>
+                                    <Select
+                                      value={screen.section}
+                                      onValueChange={(value) =>
+                                        updateScreenDraft(screen.id, { section: value as ScreenSection })
+                                      }
+                                    >
+                                      <SelectTrigger className="h-8 w-[84px] text-xs">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {REVIEW_SECTIONS.map((item) => (
+                                          <SelectItem key={item.id} value={item.id}>
+                                            {item.id}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="workspace-panel p-3 min-h-[180px] flex items-center justify-center border-2">
+                                    {screen.imagePreview ? (
+                                      <ImageFullScreen
+                                        src={screen.imagePreview}
+                                        alt={screen.title || "Screen preview"}
+                                      >
+                                        <img
+                                          src={screen.imagePreview}
+                                          alt={screen.title || "Screen preview"}
+                                          className="max-h-[160px] w-auto rounded-sm object-contain cursor-zoom-in"
+                                        />
+                                      </ImageFullScreen>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">No image yet</p>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="text-base font-medium text-foreground">
+                                      {screen.title || "Untitled screen"}
+                                    </p>
+                                    {screen.description && (
+                                      <p className="text-sm text-muted-foreground mt-1 leading-6">
+                                        {screen.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
                         )}
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{screen.title || "Untitled screen"}</p>
-                        {screen.description && (
-                          <p className="text-xs text-muted-foreground mt-1">{screen.description}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
                 <div className="workspace-panel-soft p-4">
@@ -764,7 +910,7 @@ export function FeaturesOverview() {
                     {screenDrafts.filter((screen) => screen.imageFile).length === 1 ? "" : "s"} ready.
                   </p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Save this feature when the order feels right. You can still send it for review and fine-tune later inside the feature workspace.
+                    Save this feature when the section order feels right. You can still send it for review and fine-tune later inside the feature workspace.
                   </p>
                 </div>
 

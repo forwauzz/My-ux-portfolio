@@ -43,6 +43,7 @@ import { MarkdownViewModal } from "@/components/markdown-view-modal"
 import { uploadStorageFile } from "@/lib/upload-storage-file"
 import { uploadImage } from "@/lib/upload-image"
 import { ArrowDown, ArrowUp, FileText, ImageIcon, Link as LinkIcon, Paperclip, Pencil, Plus, Trash2, X } from "lucide-react"
+import { ImageFullScreen } from "@/components/image-fullscreen"
 
 const FEATURE_STATUSES = [
   "Draft",
@@ -1096,15 +1097,22 @@ Thanks.`
               </p>
               <div className="mt-3">
                 {reviewLink ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="px-0 text-xs"
-                    onClick={() => setSendDialogOpen(true)}
-                  >
-                    Send to teammate
-                  </Button>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="px-0 text-xs"
+                      onClick={() => setSendDialogOpen(true)}
+                    >
+                      Send to teammate
+                    </Button>
+                    <Link href={reviewLink} target="_blank">
+                      <Button variant="ghost" size="sm" className="px-0 text-xs">
+                        View as team
+                      </Button>
+                    </Link>
+                  </div>
                 ) : (
                   <Button
                     type="button"
@@ -1394,7 +1402,7 @@ Thanks.`
                           </Button>
                           <Link href={`/review/${reviewItem.id}`} target="_blank">
                             <Button variant="ghost" size="sm" className="text-xs">
-                              Open review
+                              View as team
                             </Button>
                           </Link>
                           <Link href={`/review/${reviewItem.id}/results`}>
@@ -1415,11 +1423,11 @@ Thanks.`
         <section className="rounded-sm border border-border bg-card p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-4 h-px bg-accent" />
-            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-[0.15em]">
               Screens and versions
             </h2>
           </div>
-          <p className="text-[11px] text-muted-foreground mb-4 max-w-3xl">
+          <p className="text-sm text-muted-foreground mb-4 max-w-3xl leading-6">
             Keep this simple: add one screen per UI you want reviewed, give it a clear
             description, and upload one image. Add extra versions only when you want
             reviewers to compare alternatives.
@@ -1455,8 +1463,8 @@ Thanks.`
 
             <div className="rounded-sm border border-border bg-card p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-foreground">Review a single image by default</p>
-                <p className="text-[11px] text-muted-foreground mt-1">
+                <p className="text-base font-medium text-foreground">Review a single image by default</p>
+                <p className="text-sm text-muted-foreground mt-1 leading-6">
                   Turn on alternatives only if you want the team to compare multiple versions of the same screen.
                 </p>
               </div>
@@ -1600,9 +1608,9 @@ Thanks.`
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-foreground">{screen.title}</p>
+                      <p className="text-base font-medium text-foreground">{screen.title}</p>
                       {screen.description && (
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-sm text-muted-foreground mt-1 leading-6">
                           {screen.description}
                         </p>
                       )}
@@ -1656,20 +1664,25 @@ Thanks.`
                     {screen.versions.map((version) => (
                       <div
                         key={version.id}
-                        className="rounded-sm border border-border bg-secondary/20 p-3 space-y-2"
+                        className="rounded-sm border-2 border-border bg-secondary/20 p-3 space-y-2"
                       >
                         <div className="flex items-center gap-2">
                           <span className="inline-flex items-center rounded-md bg-card px-2 py-0.5 text-[11px] text-muted-foreground">
                             Version {version.label}
                           </span>
                         </div>
-                        <div className="aspect-[4/3] rounded-sm border border-border/60 bg-muted/20 overflow-hidden flex items-center justify-center">
+                        <div className="aspect-[4/3] rounded-sm border-2 border-border/80 bg-muted/20 overflow-hidden flex items-center justify-center">
                           {version.imageUrl ? (
-                            <img
+                            <ImageFullScreen
                               src={version.imageUrl}
                               alt={`${screen.title} version ${version.label}`}
-                              className="h-full w-full object-contain"
-                            />
+                            >
+                              <img
+                                src={version.imageUrl}
+                                alt={`${screen.title} version ${version.label}`}
+                                className="h-full w-full object-contain cursor-zoom-in"
+                              />
+                            </ImageFullScreen>
                           ) : (
                             <div className="text-muted-foreground">
                               <ImageIcon className="h-5 w-5" />

@@ -99,7 +99,11 @@ Rule of thumb:
   - a wide feature-creation canvas
   - a guided multi-step flow for basics, screens, and review order
   - drag-and-drop screen ordering before save
+  - storyboard-style sections `A` to `D` for organizing review flow before save
+  - fullscreen image preview from uploaded UI cards
+  - clearer `View as team` paths where review links already exist
 - The left-nav shell and cross-project overview pages now use shared workspace surface styles for more consistent visual hierarchy.
+- The main left navigation and the project sub-navigation inside the features workspace are now collapsible to prioritize the working canvas.
 - Projects now expose a `Features` section.
 - Projects now expose a `Tickets` section.
 - Users can create a feature with:
