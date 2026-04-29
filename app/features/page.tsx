@@ -4,9 +4,9 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { AppShell } from "@/components/app-shell"
-import { Dashboard } from "@/components/dashboard"
+import { FeaturesOverview } from "@/components/features-overview"
 
-export default function Page() {
+export default function FeaturesPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
 
@@ -29,10 +29,10 @@ export default function Page() {
 
   return (
     <AppShell
-      title="Dashboard"
-      description="Your personal overview and daily learning log."
+      title="Features"
+      description="Browse features across all projects, then filter by project or status when you need focus."
     >
-      <Dashboard />
+      <FeaturesOverview />
     </AppShell>
   )
 }

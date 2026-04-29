@@ -4,9 +4,9 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { AppShell } from "@/components/app-shell"
-import { Dashboard } from "@/components/dashboard"
+import { KnowledgeVault } from "@/components/knowledge-vault"
 
-export default function Page() {
+export default function VaultPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
 
@@ -29,10 +29,10 @@ export default function Page() {
 
   return (
     <AppShell
-      title="Dashboard"
-      description="Your personal overview and daily learning log."
+      title="Knowledge Vault"
+      description="Reference material, notes, and reusable knowledge you want to keep close."
     >
-      <Dashboard />
+      <KnowledgeVault />
     </AppShell>
   )
 }

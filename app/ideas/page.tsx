@@ -4,9 +4,9 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { AppShell } from "@/components/app-shell"
-import { Dashboard } from "@/components/dashboard"
+import { IdeasDashboard } from "@/components/ideas-dashboard"
 
-export default function Page() {
+export default function IdeasPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
 
@@ -29,10 +29,10 @@ export default function Page() {
 
   return (
     <AppShell
-      title="Dashboard"
-      description="Your personal overview and daily learning log."
+      title="Ideas"
+      description="Capture and organize ideas without mixing them into active project work."
     >
-      <Dashboard />
+      <IdeasDashboard />
     </AppShell>
   )
 }

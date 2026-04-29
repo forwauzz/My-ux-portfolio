@@ -90,3 +90,27 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .workspace-shell {
+    background:
+      radial-gradient(circle at top left, rgba(201, 169, 110, 0.08), transparent 28%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(250, 249, 247, 0.95));
+  }
+
+  .workspace-panel {
+    @apply rounded-sm border border-border bg-card shadow-[0_1px_0_rgba(44,44,44,0.03)];
+  }
+
+  .workspace-panel-soft {
+    @apply rounded-sm border border-border bg-secondary/20;
+  }
+
+  .workspace-stat {
+    @apply rounded-sm border border-border bg-card px-4 py-3 shadow-[0_1px_0_rgba(44,44,44,0.03)];
+  }
+
+  .workspace-section-label {
+    @apply text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground;
+  }
+}

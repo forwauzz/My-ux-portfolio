@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import {
   CommandDialog,
   CommandEmpty,
@@ -22,8 +23,9 @@ interface SearchResult {
   type: "vault" | "idea"
 }
 
-export function CommandSearch({ onNavigate }: { onNavigate: (tab: string) => void }) {
+export function CommandSearch() {
   const { user } = useAuth()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [results, setResults] = useState<SearchResult[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -40,7 +42,7 @@ export function CommandSearch({ onNavigate }: { onNavigate: (tab: string) => voi
   }, [])
 
   const loadData = useCallback(async () => {
-    if (!user || loaded) return
+    if (!user || !db || loaded) return
     try {
       const [vaultSnap, ideasSnap] = await Promise.all([
         getDocs(query(collection(db, "users", user.uid, "vaultEntries"), orderBy("createdAt", "desc"))),
@@ -91,7 +93,7 @@ export function CommandSearch({ onNavigate }: { onNavigate: (tab: string) => voi
                 key={r.id}
                 value={`vault-${r.title}-${r.snippet}`}
                 onSelect={() => {
-                  onNavigate("vault")
+                  router.push("/vault")
                   setOpen(false)
                 }}
               >
@@ -113,7 +115,7 @@ export function CommandSearch({ onNavigate }: { onNavigate: (tab: string) => voi
                 key={r.id}
                 value={`idea-${r.title}-${r.snippet}`}
                 onSelect={() => {
-                  onNavigate("ideas")
+                  router.push("/ideas")
                   setOpen(false)
                 }}
               >

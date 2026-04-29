@@ -22,17 +22,24 @@ Rule of thumb:
   - Daily learning log only
 - Projects
   - Project list
-  - Feature list and feature foundation page
-  - Artefacts
-  - Artefact versions
-  - Design vote creation
-  - Public design vote link
-  - Vote results view
+  - Project workspace
+  - Project-scoped features, tickets, artefacts, and design votes
+- Features
+  - Cross-project feature list
+  - Filter by project and status
+- Tickets
+  - Cross-project ticket list
+  - Filter by project and status
 - Knowledge Vault
 - Ideas
 
 ### Current Main Routes
 - `/`
+- `/projects`
+- `/features`
+- `/tickets`
+- `/vault`
+- `/ideas`
 - `/login`
 - `/share/[token]`
 - `/vote/[token]`
@@ -62,6 +69,26 @@ Rule of thumb:
 - `shareLinks/{token}`
 
 ### Current Feature Foundation State
+- The primary app navigation now uses a left sidebar instead of top tabs.
+- The left nav currently exposes:
+  - `Dashboard`
+  - `Projects`
+  - `Features`
+  - `Tickets`
+  - `Knowledge Vault`
+  - `Ideas`
+- `Projects` is now a lighter project directory and workspace entry point.
+- The `Projects` page now prioritizes:
+  - project selection
+  - project creation
+  - project-level summary cards
+  - quick-create for features and tickets
+  - recent project items instead of full cross-project browsing
+- `Features` is now a cross-project view.
+- `Tickets` is now a cross-project view.
+- Project summary shortcuts now deep-link into filtered `/features` and `/tickets` views for the selected project.
+- Cross-project `Features` and `Tickets` pages now group results by project and expose more project context at a glance.
+- The left-nav shell and cross-project overview pages now use shared workspace surface styles for more consistent visual hierarchy.
 - Projects now expose a `Features` section.
 - Projects now expose a `Tickets` section.
 - Users can create a feature with:
@@ -73,6 +100,10 @@ Rule of thumb:
   - summary
   - description
   - status
+  - a simplified top-of-page workflow focused on:
+    - prepare
+    - send
+    - review results
 - Users can add feature attachments:
   - inline markdown content
   - uploaded markdown files stored as inline content
@@ -326,16 +357,22 @@ Why:
 
 Longer term, moving all feature assets to Firebase Storage would simplify the system.
 
-## Route Plan
+## Navigation Structure
 
-Proposed new routes:
+Primary left-nav routes:
+- `/`
+- `/projects`
+- `/features`
+- `/tickets`
+- `/vault`
+- `/ideas`
+
+Detail routes remain nested where the work belongs:
 - `/projects/[projectId]/features/[featureId]`
+- `/projects/[projectId]/tickets/[ticketId]`
+- `/projects/[projectId]/artefacts/[artefactId]`
 - `/review/[token]`
 - `/review/[token]/results`
-
-Possible dashboard integration:
-- Add `Features` inside the existing `Projects` section first
-- Later decide whether `Features` needs its own tab or remains nested within projects
 
 ## UX Requirements
 

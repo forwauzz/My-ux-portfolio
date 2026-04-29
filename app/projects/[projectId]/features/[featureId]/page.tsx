@@ -1000,6 +1000,7 @@ Thanks.`
   }
 
   const isReviewReady = title.trim().length > 0 && screens.length > 0
+  const latestReview = reviewHistory[0] ?? null
 
   if (authLoading || loading) {
     return (
@@ -1047,7 +1048,7 @@ Thanks.`
             >
               {saving ? "Saving..." : "Save feature"}
             </Button>
-            <Link href="/">
+            <Link href="/projects">
               <Button variant="ghost" size="sm" className="text-xs">
                 Back to projects
               </Button>
@@ -1060,38 +1061,87 @@ Thanks.`
       <main className="mx-auto max-w-5xl px-6 py-10 space-y-6">
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <section className="rounded-sm border border-border bg-card p-5">
+        <section id="feature-screens" className="rounded-sm border border-border bg-card p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-4 h-px bg-accent" />
             <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
-              Ready to send
+              Review workflow
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="rounded-sm border border-border bg-secondary/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Feature title</p>
+              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">1. Prepare</p>
               <p className="text-sm text-foreground mt-2">
-                {title.trim() ? "Ready" : "Add a title before sending"}
+                {isReviewReady
+                  ? `${screens.length} screen${screens.length === 1 ? "" : "s"} ready to review`
+                  : "Add a title and at least one screen"}
               </p>
+              <div className="flex gap-3 mt-3 text-[11px]">
+                <a href="#feature-foundation" className="text-muted-foreground hover:text-foreground">
+                  Edit details
+                </a>
+                <a href="#feature-screens" className="text-muted-foreground hover:text-foreground">
+                  Manage screens
+                </a>
+              </div>
             </div>
             <div className="rounded-sm border border-border bg-secondary/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Screens</p>
+              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">2. Send</p>
               <p className="text-sm text-foreground mt-2">
-                {screens.length === 0
-                  ? "Add at least one screen"
-                  : `${screens.length} screen${screens.length === 1 ? "" : "s"} ready`}
+                {reviewLink
+                  ? "Review link created. Send it to your teammate."
+                  : isReviewReady
+                    ? "Create a public review link from this feature snapshot"
+                    : "Complete setup first"}
               </p>
+              <div className="mt-3">
+                {reviewLink ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="px-0 text-xs"
+                    onClick={() => setSendDialogOpen(true)}
+                  >
+                    Send to teammate
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="px-0 text-xs"
+                    disabled={reviewSaving || !isReviewReady}
+                    onClick={handleCreateReviewLink}
+                  >
+                    {reviewSaving ? "Creating..." : "Create review link"}
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="rounded-sm border border-border bg-secondary/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Send review</p>
+              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">3. Results</p>
               <p className="text-sm text-foreground mt-2">
-                {isReviewReady ? "Create link and send to teammate" : "Complete setup first"}
+                {latestReview
+                  ? "Open the latest review results once feedback starts coming in"
+                  : "Results will appear here after you create a review"}
               </p>
+              <div className="mt-3">
+                {latestReview ? (
+                  <Link href={`/review/${latestReview.id}/results`}>
+                    <Button variant="ghost" size="sm" className="px-0 text-xs">
+                      View latest results
+                    </Button>
+                  </Link>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">No review yet</span>
+                )}
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="rounded-sm border border-border bg-card p-5 space-y-4">
+        <section id="feature-foundation" className="rounded-sm border border-border bg-card p-5 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-4 h-px bg-accent" />
             <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
@@ -1157,29 +1207,12 @@ Thanks.`
           <div className="flex items-center gap-3 mb-3">
             <div className="w-4 h-px bg-accent" />
             <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
-              External review
+              Send for review
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            <div className="rounded-sm border border-border bg-secondary/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">1. Prepare</p>
-              <p className="text-sm text-foreground mt-2">
-                Add one screen per UI with a clear title, description, and image.
-              </p>
-            </div>
-            <div className="rounded-sm border border-border bg-secondary/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">2. Create link</p>
-              <p className="text-sm text-foreground mt-2">
-                Generate a public review link from the current feature snapshot.
-              </p>
-            </div>
-            <div className="rounded-sm border border-border bg-secondary/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">3. Send teammate</p>
-              <p className="text-sm text-foreground mt-2">
-                Copy the invite or open an email draft and send it straight to your reviewer.
-              </p>
-            </div>
-          </div>
+          <p className="text-[11px] text-muted-foreground mb-4 max-w-3xl">
+            Create a review link from the current feature snapshot, then send it to a teammate. Keep past links hidden unless you need them.
+          </p>
           <div className="rounded-sm border border-border bg-secondary/20 p-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -1221,7 +1254,14 @@ Thanks.`
 
             {reviewLink && (
               <div className="flex flex-wrap gap-2">
-                <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+                <Dialog
+                  open={sendDialogOpen}
+                  onOpenChange={(open) => {
+                    if (reviewLink) {
+                      setSendDialogOpen(open)
+                    }
+                  }}
+                >
                   <DialogTrigger asChild>
                     <Button type="button" variant="outline" size="sm" className="text-xs">
                       Send to teammate

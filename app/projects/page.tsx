@@ -4,9 +4,9 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 import { AppShell } from "@/components/app-shell"
-import { Dashboard } from "@/components/dashboard"
+import { ProjectDashboard } from "@/components/project-dashboard"
 
-export default function Page() {
+export default function ProjectsPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
 
@@ -29,10 +29,10 @@ export default function Page() {
 
   return (
     <AppShell
-      title="Dashboard"
-      description="Your personal overview and daily learning log."
+      title="Projects"
+      description="Manage project workspaces, create features, track tickets, and keep related artefacts together."
     >
-      <Dashboard />
+      <ProjectDashboard />
     </AppShell>
   )
 }

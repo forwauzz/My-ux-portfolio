@@ -152,6 +152,7 @@ export function ProjectDashboard() {
   const [featureSummary, setFeatureSummary] = useState("")
   const [featureStatus, setFeatureStatus] = useState<FeatureStatus>("Draft")
   const [featureSaving, setFeatureSaving] = useState(false)
+  const [showNewFeatureForm, setShowNewFeatureForm] = useState(false)
   const [tickets, setTickets] = useState<TicketRecord[]>([])
   const [ticketsLoading, setTicketsLoading] = useState(true)
   const [ticketTitle, setTicketTitle] = useState("")
@@ -673,6 +674,19 @@ export function ProjectDashboard() {
     [ticketStatusFilter, tickets],
   )
 
+  const recentFeatures = useMemo(() => features.slice(0, 3), [features])
+  const recentTickets = useMemo(() => filteredTickets.slice(0, 5), [filteredTickets])
+  const openTicketsCount = useMemo(
+    () => tickets.filter((ticket) => ticket.status !== "verified").length,
+    [tickets],
+  )
+  const projectFeaturesHref = selectedProjectId
+    ? `/features?project=${selectedProjectId}`
+    : "/features"
+  const projectTicketsHref = selectedProjectId
+    ? `/tickets?project=${selectedProjectId}`
+    : "/tickets"
+
   async function handleQuickTicketStatusUpdate(ticketId: string, nextStatus: TicketStatus) {
     if (!user || !selectedProjectId) return
     setError(null)
@@ -798,17 +812,68 @@ export function ProjectDashboard() {
 
         {error && <p className="text-sm text-destructive mb-2">{error}</p>}
 
-        <section className="mb-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-4 h-px bg-accent" />
-            <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.15em]">
+        <section className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-sm border border-border bg-card p-4">
+            <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
               Features
-            </h3>
+            </p>
+            <p className="mt-2 text-2xl font-medium text-foreground">{features.length}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Product areas, PRDs, and UI review packages for this project.
+            </p>
+            <Link href={projectFeaturesHref}>
+              <Button variant="ghost" size="sm" className="mt-3 px-0 text-xs">
+                View project features
+              </Button>
+            </Link>
           </div>
-          <p className="text-[11px] text-muted-foreground mb-3 max-w-2xl">
-            Features are the new home for PRDs, grouped UI screens, version comparison,
-            and external review links.
-          </p>
+          <div className="rounded-sm border border-border bg-card p-4">
+            <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
+              Tickets
+            </p>
+            <p className="mt-2 text-2xl font-medium text-foreground">{openTicketsCount}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Open or unverified issues still needing attention in this project.
+            </p>
+            <Link href={projectTicketsHref}>
+              <Button variant="ghost" size="sm" className="mt-3 px-0 text-xs">
+                View project tickets
+              </Button>
+            </Link>
+          </div>
+          <div className="rounded-sm border border-border bg-card p-4">
+            <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
+              Artefacts
+            </p>
+            <p className="mt-2 text-2xl font-medium text-foreground">{artefacts.length}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Notes, screenshots, flows, and supporting design references.
+            </p>
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Keep project-specific artefacts here. Use Features and Tickets from the left nav for broader tracking.
+            </p>
+          </div>
+        </section>
+
+        <section className="mb-6">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-px bg-accent" />
+                <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.15em]">
+                  Recent features
+                </h3>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2 max-w-2xl">
+                Create from here when you are already in a project, then use the Features page to browse everything across projects.
+              </p>
+            </div>
+            <Link href={projectFeaturesHref}>
+              <Button size="sm" variant="ghost" className="text-xs">
+                View all features
+              </Button>
+            </Link>
+          </div>
           <div className="rounded-sm border border-border bg-card p-4 mb-3 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_180px_auto] gap-3">
               <div className="flex flex-col gap-1.5">
@@ -877,7 +942,7 @@ export function ProjectDashboard() {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {features.map((feature) => (
+              {recentFeatures.map((feature) => (
                 <div
                   key={feature.id}
                   className="rounded-sm border-l-2 border-l-accent border border-border bg-card px-4 py-3 flex items-start justify-between gap-3"
@@ -905,21 +970,34 @@ export function ProjectDashboard() {
                   </Link>
                 </div>
               ))}
+              {features.length > recentFeatures.length && (
+                <p className="text-[11px] text-muted-foreground">
+                  Showing {recentFeatures.length} of {features.length} features for this project.
+                </p>
+              )}
             </div>
           )}
         </section>
 
         <section className="mb-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-4 h-px bg-accent" />
-            <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.15em]">
-              Tickets
-            </h3>
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-px bg-accent" />
+                <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.15em]">
+                  Recent tickets
+                </h3>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2 max-w-2xl">
+                Keep issue capture quick here, then use the Tickets page to review status across projects.
+              </p>
+            </div>
+            <Link href={projectTicketsHref}>
+              <Button size="sm" variant="ghost" className="text-xs">
+                View all tickets
+              </Button>
+            </Link>
           </div>
-          <p className="text-[11px] text-muted-foreground mb-3 max-w-2xl">
-            Track bugs and issues for this project, link them to features when needed,
-            assign them by name, and mark them through open, in progress, done, and verified.
-          </p>
 
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <Select
@@ -1106,7 +1184,7 @@ export function ProjectDashboard() {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {filteredTickets.map((ticket) => {
+              {recentTickets.map((ticket) => {
                 const linkedFeature = features.find((feature) => feature.id === ticket.featureId)
                 return (
                   <div
@@ -1195,6 +1273,11 @@ export function ProjectDashboard() {
                   </div>
                 )
               })}
+              {filteredTickets.length > recentTickets.length && (
+                <p className="text-[11px] text-muted-foreground">
+                  Showing {recentTickets.length} of {filteredTickets.length} tickets for the current filter.
+                </p>
+              )}
             </div>
           )}
         </section>
