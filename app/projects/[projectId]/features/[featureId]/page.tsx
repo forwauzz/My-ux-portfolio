@@ -183,6 +183,7 @@ export default function FeatureDetailPage() {
   const [reviewRecipientEmail, setReviewRecipientEmail] = useState("")
   const [sendDialogOpen, setSendDialogOpen] = useState(false)
   const [showReviewHistory, setShowReviewHistory] = useState(false)
+  const [workspaceStep, setWorkspaceStep] = useState(1)
 
   useEffect(() => {
     if (authLoading) return
@@ -1002,6 +1003,12 @@ Thanks.`
 
   const isReviewReady = title.trim().length > 0 && screens.length > 0
   const latestReview = reviewHistory[0] ?? null
+  const workspaceSteps = [
+    { step: 1, label: "Basics", note: "Name it and add context" },
+    { step: 2, label: "Screens", note: "Add UI to review" },
+    { step: 3, label: "Attachments", note: "Optional PRD and links" },
+    { step: 4, label: "Send", note: "Create and share the review" },
+  ] as const
 
   if (authLoading || loading) {
     return (
@@ -1062,100 +1069,45 @@ Thanks.`
       <main className="mx-auto max-w-5xl px-6 py-10 space-y-6">
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <section id="feature-screens" className="rounded-sm border border-border bg-card p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-4 h-px bg-accent" />
-            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
-              Review workflow
-            </h2>
+        <section className="rounded-sm border border-border bg-card p-5 space-y-5">
+          <div className="space-y-2">
+            <p className="workspace-section-label">Feature flow</p>
+            <p className="text-base text-foreground">Complete one small step at a time.</p>
+            <p className="text-sm text-muted-foreground">
+              Keep each page focused. Finish a few actions, then save and continue.
+            </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="rounded-sm border border-border bg-secondary/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">1. Prepare</p>
-              <p className="text-sm text-foreground mt-2">
-                {isReviewReady
-                  ? `${screens.length} screen${screens.length === 1 ? "" : "s"} ready to review`
-                  : "Add a title and at least one screen"}
-              </p>
-              <div className="flex gap-3 mt-3 text-[11px]">
-                <a href="#feature-foundation" className="text-muted-foreground hover:text-foreground">
-                  Edit details
-                </a>
-                <a href="#feature-screens" className="text-muted-foreground hover:text-foreground">
-                  Manage screens
-                </a>
-              </div>
-            </div>
-            <div className="rounded-sm border border-border bg-secondary/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">2. Send</p>
-              <p className="text-sm text-foreground mt-2">
-                {reviewLink
-                  ? "Review link created. Send it to your teammate."
-                  : isReviewReady
-                    ? "Create a public review link from this feature snapshot"
-                    : "Complete setup first"}
-              </p>
-              <div className="mt-3">
-                {reviewLink ? (
-                  <div className="flex flex-wrap gap-3">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="px-0 text-xs"
-                      onClick={() => setSendDialogOpen(true)}
-                    >
-                      Send to teammate
-                    </Button>
-                    <Link href={reviewLink} target="_blank">
-                      <Button variant="ghost" size="sm" className="px-0 text-xs">
-                        View as team
-                      </Button>
-                    </Link>
-                  </div>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="px-0 text-xs"
-                    disabled={reviewSaving || !isReviewReady}
-                    onClick={handleCreateReviewLink}
-                  >
-                    {reviewSaving ? "Creating..." : "Create review link"}
-                  </Button>
-                )}
-              </div>
-            </div>
-            <div className="rounded-sm border border-border bg-secondary/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">3. Results</p>
-              <p className="text-sm text-foreground mt-2">
-                {latestReview
-                  ? "Open the latest review results once feedback starts coming in"
-                  : "Results will appear here after you create a review"}
-              </p>
-              <div className="mt-3">
-                {latestReview ? (
-                  <Link href={`/review/${latestReview.id}/results`}>
-                    <Button variant="ghost" size="sm" className="px-0 text-xs">
-                      View latest results
-                    </Button>
-                  </Link>
-                ) : (
-                  <span className="text-[11px] text-muted-foreground">No review yet</span>
-                )}
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {workspaceSteps.map((item) => (
+              <button
+                key={item.step}
+                type="button"
+                onClick={() => setWorkspaceStep(item.step)}
+                className={`rounded-sm border-2 p-4 text-left transition-colors ${
+                  workspaceStep === item.step
+                    ? "border-accent bg-secondary text-foreground"
+                    : "border-border bg-card text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <p className="text-[11px] uppercase tracking-[0.15em]">Step {item.step}</p>
+                <p className="mt-2 text-sm font-medium">{item.label}</p>
+                <p className="mt-1 text-xs">{item.note}</p>
+              </button>
+            ))}
           </div>
         </section>
 
+        {workspaceStep === 1 && (
         <section id="feature-foundation" className="rounded-sm border border-border bg-card p-5 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-4 h-px bg-accent" />
             <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
-              Feature foundation
+              Basics
             </h2>
           </div>
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Start with the core context only: feature name, short summary, status, and the notes your reviewer needs.
+          </p>
 
           <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.4fr)_220px] gap-4">
             <div className="flex flex-col gap-1.5">
@@ -1209,9 +1161,61 @@ Thanks.`
               minHeightClassName="min-h-40"
             />
           </div>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <Link href="/projects">
+              <Button variant="ghost" size="sm" className="text-xs">
+                Back to projects
+              </Button>
+            </Link>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              disabled={saving || !title.trim()}
+              onClick={async () => {
+                await handleSave()
+                setWorkspaceStep(2)
+              }}
+            >
+              {saving ? "Saving..." : "Save and continue"}
+            </Button>
+          </div>
         </section>
+        )}
 
+        {workspaceStep === 4 && (
         <section className="rounded-sm border border-border bg-card p-5">
+          <div className="space-y-4 mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-4 h-px bg-accent" />
+              <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
+                Review status
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-sm border border-border bg-secondary/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Ready</p>
+                <p className="text-sm text-foreground mt-2">
+                  {isReviewReady
+                    ? `${screens.length} screen${screens.length === 1 ? "" : "s"} ready to review`
+                    : "Add a title and at least one screen first"}
+                </p>
+              </div>
+              <div className="rounded-sm border border-border bg-secondary/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Link</p>
+                <p className="text-sm text-foreground mt-2">
+                  {reviewLink ? "A public review link is ready to share." : "Create the review link when setup is done."}
+                </p>
+              </div>
+              <div className="rounded-sm border border-border bg-secondary/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground">Results</p>
+                <p className="text-sm text-foreground mt-2">
+                  {latestReview ? "Open the latest results after feedback starts." : "Results appear after a review is created."}
+                </p>
+              </div>
+            </div>
+          </div>
           <div className="flex items-center gap-3 mb-3">
             <div className="w-4 h-px bg-accent" />
             <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
@@ -1418,8 +1422,24 @@ Thanks.`
               )}
             </div>
           </div>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setWorkspaceStep(3)}>
+              Back
+            </Button>
+            <div className="flex items-center gap-2">
+              {latestReview && (
+                <Link href={`/review/${latestReview.id}/results`}>
+                  <Button variant="ghost" size="sm" className="text-xs">
+                    View latest results
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </div>
         </section>
+        )}
 
+        {workspaceStep === 2 && (
         <section className="rounded-sm border border-border bg-card p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-4 h-px bg-accent" />
@@ -1699,8 +1719,25 @@ Thanks.`
               ))}
             </div>
           )}
+          <div className="flex items-center justify-between gap-3 pt-5">
+            <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setWorkspaceStep(1)}>
+              Back
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              disabled={screens.length === 0}
+              onClick={() => setWorkspaceStep(3)}
+            >
+              Continue to attachments
+            </Button>
+          </div>
         </section>
+        )}
 
+        {workspaceStep === 3 && (
         <section className="rounded-sm border border-border bg-card p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-4 h-px bg-accent" />
@@ -1927,7 +1964,16 @@ Thanks.`
               ))}
             </div>
           )}
+          <div className="flex items-center justify-between gap-3 pt-5">
+            <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setWorkspaceStep(2)}>
+              Back
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => setWorkspaceStep(4)}>
+              Continue to send
+            </Button>
+          </div>
         </section>
+        )}
 
         <Dialog open={editScreenId !== null} onOpenChange={(open) => !open && closeEditScreen()}>
           <DialogContent className="sm:max-w-2xl">
@@ -2019,34 +2065,6 @@ Thanks.`
           </DialogContent>
         </Dialog>
 
-        <section className="rounded-sm border border-border bg-card p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-4 h-px bg-accent" />
-            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
-              Next chunks
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="rounded-sm border border-border bg-secondary/30 p-4">
-              <p className="text-sm font-medium text-foreground">Attachments</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                PRD, markdown, PDF, and supporting links will live here.
-              </p>
-            </div>
-            <div className="rounded-sm border border-border bg-secondary/30 p-4">
-              <p className="text-sm font-medium text-foreground">Screens and versions</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Group UI screens and add up to three versions per screen.
-              </p>
-            </div>
-            <div className="rounded-sm border border-border bg-secondary/30 p-4">
-              <p className="text-sm font-medium text-foreground">External review</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Public review links, annotations, and reviewer submissions come next.
-              </p>
-            </div>
-          </div>
-        </section>
       </main>
     </div>
   )

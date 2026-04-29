@@ -98,6 +98,9 @@ Rule of thumb:
   - sub-navigation for projects inside the features workspace
   - a wide feature-creation canvas
   - a guided multi-step flow for basics, screens, and review order
+  - the create flow is now intentionally reduced so each step asks for only 2 to 3 actions
+  - basics now focuses on title, reviewer context, and optional docs only
+  - screens now focuses on one active UI image at a time instead of stacked screen forms
   - drag-and-drop screen ordering before save
   - storyboard-style sections `A` to `D` for organizing review flow before save
   - fullscreen image preview from uploaded UI cards
@@ -115,10 +118,13 @@ Rule of thumb:
   - summary
   - description
   - status
-  - a simplified top-of-page workflow focused on:
-    - prepare
+  - a step-based workspace so only one major stage is visible at a time
+  - the saved feature workspace is now split into:
+    - basics
+    - screens
+    - attachments
     - send
-    - review results
+  - each stage is intended to keep work to a few actions before moving forward
 - Users can add feature attachments:
   - inline markdown content
   - uploaded markdown files stored as inline content

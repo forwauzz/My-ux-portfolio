@@ -17,13 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { uploadStorageFile } from "@/lib/upload-storage-file"
 import { uploadImage } from "@/lib/upload-image"
 import { ImageFullScreen } from "@/components/image-fullscreen"
@@ -119,11 +113,10 @@ export function FeaturesOverview() {
   const [showCreate, setShowCreate] = useState(false)
   const [createStep, setCreateStep] = useState(1)
   const [createTitle, setCreateTitle] = useState("")
-  const [createSummary, setCreateSummary] = useState("")
   const [createDescription, setCreateDescription] = useState("")
-  const [createStatus, setCreateStatus] = useState<FeatureStatus>("Draft")
   const [attachmentDrafts, setAttachmentDrafts] = useState<AttachmentDraft[]>([])
   const [screenDrafts, setScreenDrafts] = useState<ScreenDraft[]>([])
+  const [activeScreenDraftId, setActiveScreenDraftId] = useState<string | null>(null)
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -206,7 +199,9 @@ export function FeaturesOverview() {
   useEffect(() => {
     if (screenDrafts.length > 0) return
     if (showCreate) {
-      setScreenDrafts([emptyScreenDraft()])
+      const nextDraft = emptyScreenDraft()
+      setScreenDrafts([nextDraft])
+      setActiveScreenDraftId(nextDraft.id)
     }
   }, [screenDrafts.length, showCreate])
 
@@ -229,15 +224,19 @@ export function FeaturesOverview() {
     [screenDrafts],
   )
 
+  const activeScreenDraft = useMemo(
+    () => screenDrafts.find((screen) => screen.id === activeScreenDraftId) ?? screenDrafts[0] ?? null,
+    [activeScreenDraftId, screenDrafts],
+  )
+
   function resetCreateFlow() {
     setShowCreate(false)
     setCreateStep(1)
     setCreateTitle("")
-    setCreateSummary("")
     setCreateDescription("")
-    setCreateStatus("Draft")
     setAttachmentDrafts([])
     setScreenDrafts([])
+    setActiveScreenDraftId(null)
     setDraggedScreenId(null)
     setCreateError(null)
   }
@@ -257,7 +256,9 @@ export function FeaturesOverview() {
   }
 
   function addScreenDraft() {
-    setScreenDrafts((prev) => [...prev, emptyScreenDraft()])
+    const nextDraft = emptyScreenDraft()
+    setScreenDrafts((prev) => [...prev, nextDraft])
+    setActiveScreenDraftId(nextDraft.id)
   }
 
   function updateScreenDraft(id: string, patch: Partial<ScreenDraft>) {
@@ -267,13 +268,17 @@ export function FeaturesOverview() {
   }
 
   function removeScreenDraft(id: string) {
-    setScreenDrafts((prev) => {
-      const next = prev.filter((item) => item.id !== id)
-      if (next.length === 0) {
-        return [emptyScreenDraft()]
-      }
-      return next
-    })
+    const next = screenDrafts.filter((item) => item.id !== id)
+    if (next.length === 0) {
+      const replacement = emptyScreenDraft()
+      setScreenDrafts([replacement])
+      setActiveScreenDraftId(replacement.id)
+      return
+    }
+    setScreenDrafts(next)
+    if (activeScreenDraftId === id) {
+      setActiveScreenDraftId(next[0].id)
+    }
   }
 
   function moveScreenDraft(draggedId: string, targetId: string) {
@@ -342,9 +347,9 @@ export function FeaturesOverview() {
         {
           projectId: selectedProjectId,
           title: createTitle.trim(),
-          summary: createSummary.trim(),
+          summary: "",
           description: createDescription,
-          status: createStatus,
+          status: "Draft",
           createdAt: now,
           updatedAt: now,
           createdAtServer: serverTimestamp(),
@@ -522,7 +527,7 @@ export function FeaturesOverview() {
                 <p className="workspace-section-label">{selectedProject.name}</p>
                 <p className="text-3xl font-medium text-foreground mt-2">Create feature</p>
                 <p className="text-base text-muted-foreground mt-2 max-w-2xl leading-7">
-                  Keep this wide and simple. Answer a few questions, add your UI, then decide the order your team should review.
+                  One decision at a time. Add the basics, add the UI, then set the order your team should review.
                 </p>
               </div>
               <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={resetCreateFlow}>
@@ -568,43 +573,17 @@ export function FeaturesOverview() {
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="feature-summary" className="text-xs text-muted-foreground">
-                        Short summary
-                      </Label>
-                      <Input
-                        id="feature-summary"
-                        value={createSummary}
-                        onChange={(e) => setCreateSummary(e.target.value)}
-                        placeholder="What is this feature about?"
-                        className="text-sm"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
                       <Label htmlFor="feature-description" className="text-xs text-muted-foreground">
-                        Description
+                        What should the team understand?
                       </Label>
                       <Textarea
                         id="feature-description"
                         value={createDescription}
                         onChange={(e) => setCreateDescription(e.target.value)}
-                        placeholder="Describe the goal, what the reviewer should understand, and any context."
+                        placeholder="Describe the goal and any context the reviewer needs before looking at the UI."
                         rows={6}
                         className="text-sm resize-y"
                       />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs text-muted-foreground">Status</Label>
-                      <Select value={createStatus} onValueChange={(value) => setCreateStatus(value as FeatureStatus)}>
-                        <SelectTrigger className="w-full text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Draft">Draft</SelectItem>
-                          <SelectItem value="In Review">In Review</SelectItem>
-                          <SelectItem value="Ready for Review">Ready for Review</SelectItem>
-                          <SelectItem value="Archived">Archived</SelectItem>
-                        </SelectContent>
-                      </Select>
                     </div>
                   </div>
 
@@ -612,7 +591,7 @@ export function FeaturesOverview() {
                     <div>
                       <p className="workspace-section-label">Docs and specs</p>
                       <p className="text-sm text-muted-foreground mt-2">
-                        Upload markdown, PDFs, docs, or add a link if the team needs more context.
+                        Optional. Add a PRD, markdown, PDF, or link only if the team needs more context.
                       </p>
                     </div>
                     <div className="space-y-3">
@@ -714,36 +693,61 @@ export function FeaturesOverview() {
 
             {createStep === 2 && (
               <div className="space-y-6">
-                <div className="space-y-4">
-                  {screenDrafts.map((screen, index) => (
-                    <div key={screen.id} className="workspace-panel p-5 space-y-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="workspace-section-label">Screen {index + 1}</p>
-                        <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => removeScreenDraft(screen.id)}>
+                <div>
+                  <p className="text-sm text-foreground">Work on one UI at a time.</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Give it a name, a short note, and upload the image.
+                  </p>
+                </div>
+                {activeScreenDraft && (
+                  <div className="workspace-panel p-5 space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="workspace-section-label">
+                        Screen {screenDrafts.findIndex((screen) => screen.id === activeScreenDraft.id) + 1}
+                      </p>
+                      {screenDrafts.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => removeScreenDraft(activeScreenDraft.id)}
+                        >
                           Remove
                         </Button>
-                      </div>
-                      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-4">
-                        <div className="space-y-4">
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-5">
+                      <div className="space-y-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">UI name</Label>
                           <Input
-                            value={screen.title}
-                            onChange={(e) => updateScreenDraft(screen.id, { title: e.target.value })}
-                            placeholder="Image title"
-                            className="text-sm"
+                            value={activeScreenDraft.title}
+                            onChange={(e) => updateScreenDraft(activeScreenDraft.id, { title: e.target.value })}
+                            placeholder="E.g. Home dashboard"
+                            className="h-12 text-sm"
                           />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">What should they notice?</Label>
                           <Textarea
-                            value={screen.description}
-                            onChange={(e) => updateScreenDraft(screen.id, { description: e.target.value })}
-                            placeholder="What should the reviewer pay attention to on this UI?"
+                            value={activeScreenDraft.description}
+                            onChange={(e) =>
+                              updateScreenDraft(activeScreenDraft.id, { description: e.target.value })
+                            }
+                            placeholder="Point the reviewer to what matters on this screen."
                             rows={4}
                             className="text-sm resize-y"
                           />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Upload image</Label>
                           <Input
                             type="file"
                             accept="image/*"
                             onChange={(e) => {
                               const file = e.target.files ? e.target.files[0] ?? null : null
-                              updateScreenDraft(screen.id, {
+                              updateScreenDraft(activeScreenDraft.id, {
                                 imageFile: file,
                                 imagePreview: file ? URL.createObjectURL(file) : null,
                               })
@@ -751,32 +755,57 @@ export function FeaturesOverview() {
                             className="text-sm"
                           />
                         </div>
-                        <div className="workspace-panel-soft p-3 flex items-center justify-center min-h-[220px]">
-                          {screen.imagePreview ? (
-                            <ImageFullScreen
-                              src={screen.imagePreview}
-                              alt={screen.title || "Screen preview"}
-                            >
-                              <img
-                                src={screen.imagePreview}
-                                alt={screen.title || "Screen preview"}
-                                className="max-h-[220px] w-auto rounded-sm object-contain cursor-zoom-in"
-                              />
-                            </ImageFullScreen>
-                          ) : (
-                            <p className="text-sm text-muted-foreground text-center">
-                              Upload an image to preview it here.
-                            </p>
-                          )}
-                        </div>
+                      </div>
+                      <div className="workspace-panel-soft p-3 flex items-center justify-center min-h-[280px] border-2">
+                        {activeScreenDraft.imagePreview ? (
+                          <ImageFullScreen
+                            src={activeScreenDraft.imagePreview}
+                            alt={activeScreenDraft.title || "Screen preview"}
+                          >
+                            <img
+                              src={activeScreenDraft.imagePreview}
+                              alt={activeScreenDraft.title || "Screen preview"}
+                              className="max-h-[260px] w-auto rounded-sm object-contain cursor-zoom-in"
+                            />
+                          </ImageFullScreen>
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center">
+                            Upload an image to preview it here.
+                          </p>
+                        )}
                       </div>
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                <div className="workspace-panel-soft p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="workspace-section-label">Added images</p>
+                    <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={addScreenDraft}>
+                      Add another image
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {screenDrafts.map((screen, index) => {
+                      const isActive = screen.id === activeScreenDraft?.id
+                      return (
+                        <button
+                          key={screen.id}
+                          type="button"
+                          onClick={() => setActiveScreenDraftId(screen.id)}
+                          className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                            isActive
+                              ? "border-foreground bg-secondary text-foreground"
+                              : "border-border bg-background text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {screen.title.trim() || `Screen ${index + 1}`}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={addScreenDraft}>
-                    Add another image
-                  </Button>
                   <div className="flex gap-2">
                     <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setCreateStep(1)}>
                       Back
@@ -792,11 +821,9 @@ export function FeaturesOverview() {
             {createStep === 3 && (
               <div className="space-y-6">
                 <div>
-                  <p className="text-sm text-foreground">
-                    Open canvas. Drag the UI cards into sections and set the exact review sequence.
-                  </p>
+                  <p className="text-sm text-foreground">Set the review order.</p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Use sections `A` to `D` to group the flow, then reorder inside each section. The final sequence becomes the exact presentation order on the public review link.
+                    Drag the UI cards into sections `A` to `D`. This becomes the exact order your team sees.
                   </p>
                 </div>
 
